@@ -1,8 +1,7 @@
 ﻿<Application x:Class="RightMenuCheck.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:converters="clr-namespace:RightMenuCheck.App.Converters"
-             StartupUri="MainWindow.xaml">
+             xmlns:converters="clr-namespace:RightMenuCheck.App.Converters">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

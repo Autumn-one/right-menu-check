@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Security.Principal;
 using RightMenuCheck.Core.Backup;
 using RightMenuCheck.Windows.Backup;
+using RightMenuCheck.Windows.Diagnostics;
 using RightMenuCheck.Windows.Elevation;
 using RightMenuCheck.Windows.Management;
 using RightMenuCheck.Windows.Registry;
@@ -14,8 +15,17 @@ internal static class ElevatedHelperHost
 
     public static async Task<int> RunAsync(string[] args, CancellationToken cancellationToken)
     {
+        using var logger = StructuredFileLogger.CreateDefault("elevated");
+        logger.Log(
+            AppLogLevel.Information,
+            "elevated.started",
+            "Elevated helper started.");
         if (!ElevatedArguments.TryParse(args, out var arguments) || arguments is null)
         {
+            logger.Log(
+                AppLogLevel.Warning,
+                "elevated.invalid_arguments",
+                "Elevated helper arguments are invalid.");
             return 2;
         }
 
@@ -35,6 +45,15 @@ internal static class ElevatedHelperHost
                 .ReadRequestAsync(pipe, timeout.Token)
                 .ConfigureAwait(false);
             activeRequest = request;
+            logger.Log(
+                AppLogLevel.Information,
+                "elevated.request_received",
+                "Elevated request received.",
+                new Dictionary<string, object?>
+                {
+                    ["operation"] = request.Operation.ToString(),
+                    ["requestId"] = request.RequestId,
+                });
             var validation = ElevationRequestValidator.ValidateEnvelope(request, arguments.Nonce);
             if (!validation.IsValid)
             {
@@ -189,6 +208,17 @@ internal static class ElevatedHelperHost
                     mutationResult.ErrorMessage,
                     CancellationToken.None)
                 .ConfigureAwait(false);
+            logger.Log(
+                mutationResult.Succeeded ? AppLogLevel.Information : AppLogLevel.Error,
+                "elevated.completed",
+                "Elevated registry operation completed.",
+                new Dictionary<string, object?>
+                {
+                    ["operation"] = request.Operation.ToString(),
+                    ["succeeded"] = mutationResult.Succeeded,
+                    ["rolledBack"] = mutationResult.RolledBack,
+                    ["journalPath"] = mutationResult.JournalPath,
+                });
             return mutationResult.Succeeded ? 0 : 8;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -199,6 +229,11 @@ internal static class ElevatedHelperHost
         catch (Exception exception)
 #pragma warning restore CA1031
         {
+            logger.Log(
+                AppLogLevel.Error,
+                "elevated.failed",
+                "Elevated helper failed.",
+                exception: exception);
             if (activeRequest is not null && pipe.IsConnected)
             {
                 try

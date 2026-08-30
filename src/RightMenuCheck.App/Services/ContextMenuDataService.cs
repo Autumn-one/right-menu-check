@@ -2,6 +2,7 @@ using System.Diagnostics;
 using RightMenuCheck.Core.Inventory;
 using RightMenuCheck.Core.Metadata;
 using RightMenuCheck.Windows.Benchmark;
+using RightMenuCheck.Windows.Diagnostics;
 using RightMenuCheck.Windows.Inventory;
 using RightMenuCheck.Windows.Metadata;
 using RightMenuCheck.Windows.Packages;
@@ -48,33 +49,124 @@ public interface IContextMenuDataService
 public sealed class ContextMenuDataService : IContextMenuDataService
 {
     private readonly ContextMenuBenchmarkRunner _benchmarkRunner;
+    private readonly IAppLogger _logger;
 
-    public ContextMenuDataService()
+    public ContextMenuDataService(IAppLogger? logger = null)
     {
+        _logger = logger ?? NullAppLogger.Instance;
         _benchmarkRunner = new ContextMenuBenchmarkRunner(
             new ProbeWorkerClient(),
             new ProbeWorkerSelector(ProbeWorkerLocator.Locate()));
     }
 
-    public Task<ContextMenuScanSnapshot> ScanAsync(
+    public async Task<ContextMenuScanSnapshot> ScanAsync(
         IProgress<ScanProgress>? progress,
-        CancellationToken cancellationToken) =>
-        Task.Run(
-            async () => await ScanCoreAsync(progress, cancellationToken).ConfigureAwait(false),
-            cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        _logger.Log(
+            AppLogLevel.Information,
+            "scan.started",
+            "Context-menu inventory scan started.");
+        try
+        {
+            var snapshot = await Task.Run(
+                    async () => await ScanCoreAsync(progress, cancellationToken).ConfigureAwait(false),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            _logger.Log(
+                AppLogLevel.Information,
+                "scan.completed",
+                "Context-menu inventory scan completed.",
+                new Dictionary<string, object?>
+                {
+                    ["registrationCount"] = snapshot.Items.Count,
+                    ["registryIssueCount"] = snapshot.RegistryIssues.Count,
+                    ["packageIssueCount"] = snapshot.PackageIssues.Count,
+                    ["metadataIssueCount"] = snapshot.MetadataIssues.Count,
+                    ["durationMilliseconds"] = snapshot.Duration.TotalMilliseconds,
+                });
+            return snapshot;
+        }
+#pragma warning disable CA1031
+        catch (Exception exception)
+#pragma warning restore CA1031
+        {
+            _logger.Log(
+                AppLogLevel.Error,
+                "scan.failed",
+                "Context-menu inventory scan failed.",
+                exception: exception);
+            throw;
+        }
+    }
 
-    public Task<ContextMenuBenchmarkResult> BenchmarkAsync(
+    public async Task<ContextMenuBenchmarkResult> BenchmarkAsync(
         ContextMenuRegistrationMetadata metadata,
         BenchmarkTarget target,
         BenchmarkOptions options,
-        CancellationToken cancellationToken) =>
-        _benchmarkRunner.RunAsync(metadata, target, options, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        _logger.Log(
+            AppLogLevel.Information,
+            "benchmark.started",
+            "Isolated handler benchmark started.",
+            new Dictionary<string, object?>
+            {
+                ["registrationId"] = metadata.Registration.Id,
+                ["trialCount"] = options.TrialCount,
+                ["targetKind"] = target.Kind.ToString(),
+            });
+        var result = await _benchmarkRunner
+            .RunAsync(metadata, target, options, cancellationToken)
+            .ConfigureAwait(false);
+        LogBenchmarkResult("benchmark.completed", result);
+        return result;
+    }
 
-    public Task<ContextMenuBenchmarkResult> BenchmarkAggregateAsync(
+    public async Task<ContextMenuBenchmarkResult> BenchmarkAggregateAsync(
         BenchmarkTarget target,
         BenchmarkOptions options,
-        CancellationToken cancellationToken) =>
-        _benchmarkRunner.RunAggregateAsync(target, options, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        _logger.Log(
+            AppLogLevel.Information,
+            "benchmark.aggregate_started",
+            "Aggregate Shell-menu benchmark started.",
+            new Dictionary<string, object?>
+            {
+                ["trialCount"] = options.TrialCount,
+                ["targetKind"] = target.Kind.ToString(),
+            });
+        var result = await _benchmarkRunner
+            .RunAggregateAsync(target, options, cancellationToken)
+            .ConfigureAwait(false);
+        LogBenchmarkResult("benchmark.aggregate_completed", result);
+        return result;
+    }
+
+    private void LogBenchmarkResult(string eventName, ContextMenuBenchmarkResult result)
+    {
+        var level = result.TimeoutCount > 0 || result.CrashCount > 0
+            ? AppLogLevel.Warning
+            : result.Status == BenchmarkStatus.Failed
+                ? AppLogLevel.Error
+                : AppLogLevel.Information;
+        _logger.Log(
+            level,
+            eventName,
+            "Benchmark completed.",
+            new Dictionary<string, object?>
+            {
+                ["registrationId"] = result.Id,
+                ["status"] = result.Status.ToString(),
+                ["successfulTrials"] = result.SuccessfulTrials,
+                ["timeoutCount"] = result.TimeoutCount,
+                ["crashCount"] = result.CrashCount,
+                ["failureCount"] = result.FailureCount,
+                ["medianMilliseconds"] = result.HandlerDuration?.Median,
+                ["percentile95Milliseconds"] = result.HandlerDuration?.Percentile95,
+            });
+    }
 
     private static async Task<ContextMenuScanSnapshot> ScanCoreAsync(
         IProgress<ScanProgress>? progress,

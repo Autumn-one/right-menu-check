@@ -2,6 +2,7 @@ using System.IO;
 using RightMenuCheck.Core.Backup;
 using RightMenuCheck.Core.Metadata;
 using RightMenuCheck.Windows.Backup;
+using RightMenuCheck.Windows.Diagnostics;
 using RightMenuCheck.Windows.Elevation;
 using RightMenuCheck.Windows.Management;
 using RightMenuCheck.Windows.Registry;
@@ -68,9 +69,11 @@ public sealed class ContextMenuManagementService : IContextMenuManagementService
     private readonly ApplicationUninstallService _uninstallService = new(
         new SystemPackageUninstaller(),
         new SystemProcessUninstallLauncher());
+    private readonly IAppLogger _logger;
 
-    public ContextMenuManagementService()
+    public ContextMenuManagementService(IAppLogger? logger = null)
     {
+        _logger = logger ?? NullAppLogger.Instance;
         var registryReader = new SystemRegistryReader();
         var securityReader = new SystemRegistrySecurityDescriptorReader();
         var snapshotReader = new RegistrySnapshotReader(registryReader, securityReader);
@@ -111,18 +114,43 @@ public sealed class ContextMenuManagementService : IContextMenuManagementService
     public ApplicationUninstallPlan PreviewUninstall(ApplicationOwnerMetadata owner) =>
         _uninstallPlanner.CreatePlan(owner, allowSystemProtected: false);
 
-    public Task<BackupArtifactInfo> CreateBackupAsync(
+    public async Task<BackupArtifactInfo> CreateBackupAsync(
         string path,
         IReadOnlyList<ContextMenuRegistrationMetadata> registrations,
         BackupPurpose purpose,
-        CancellationToken cancellationToken) =>
-        _backupService.CreateAsync(
-            path,
-            registrations,
-            purpose,
-            requireComplete: true,
-            overwrite: true,
-            cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        _logger.Log(
+            AppLogLevel.Information,
+            "backup.started",
+            "Context-menu backup started.",
+            new Dictionary<string, object?>
+            {
+                ["registrationCount"] = registrations.Count,
+                ["purpose"] = purpose.ToString(),
+                ["backupPath"] = path,
+            });
+        var artifact = await _backupService.CreateAsync(
+                path,
+                registrations,
+                purpose,
+                requireComplete: true,
+                overwrite: true,
+                cancellationToken)
+            .ConfigureAwait(false);
+        _logger.Log(
+            AppLogLevel.Information,
+            "backup.completed",
+            "Context-menu backup completed.",
+            new Dictionary<string, object?>
+            {
+                ["backupId"] = artifact.BackupId,
+                ["registrationCount"] = artifact.RegistrationCount,
+                ["registryKeyCount"] = artifact.RegistryKeyCount,
+                ["isComplete"] = artifact.IsComplete,
+            });
+        return artifact;
+    }
 
     public async Task<ManagementExecutionResult> ExecuteStateAsync(
         ContextMenuRegistrationMetadata metadata,
@@ -130,6 +158,15 @@ public sealed class ContextMenuManagementService : IContextMenuManagementService
         string backupPath,
         CancellationToken cancellationToken)
     {
+        _logger.Log(
+            AppLogLevel.Information,
+            "state_change.started",
+            "Context-menu state change started.",
+            new Dictionary<string, object?>
+            {
+                ["registrationId"] = metadata.Registration.Id,
+                ["action"] = action.ToString(),
+            });
         var prepared = await _stateService.PrepareAsync(
                 metadata,
                 action,
@@ -155,15 +192,19 @@ public sealed class ContextMenuManagementService : IContextMenuManagementService
                     ElevatedHelperLocator.GetOptions(),
                     cancellationToken)
                 .ConfigureAwait(false);
-            return FromElevation(response, prepared.Backup);
+            var elevatedResult = FromElevation(response, prepared.Backup);
+            LogManagementResult("state_change.completed", elevatedResult);
+            return elevatedResult;
         }
 
         var result = await _stateService
             .ExecuteLocalAsync(prepared, cancellationToken)
             .ConfigureAwait(false);
-        return result.MutationResult?.Succeeded == true
+        var localResult = result.MutationResult?.Succeeded == true
             ? Success("菜单状态已更新。", result.Backup)
             : Failure(result.MutationResult?.ErrorMessage, result.Backup);
+        LogManagementResult("state_change.completed", localResult);
+        return localResult;
     }
 
     public async Task<ManagementExecutionResult> ExecuteRemovalAsync(
@@ -171,6 +212,14 @@ public sealed class ContextMenuManagementService : IContextMenuManagementService
         string backupPath,
         CancellationToken cancellationToken)
     {
+        _logger.Log(
+            AppLogLevel.Information,
+            "registration_removal.started",
+            "Context-menu registration removal started.",
+            new Dictionary<string, object?>
+            {
+                ["registrationId"] = metadata.Registration.Id,
+            });
         var prepared = await _removalService.PrepareAsync(
                 metadata,
                 backupPath,
@@ -195,15 +244,19 @@ public sealed class ContextMenuManagementService : IContextMenuManagementService
                     ElevatedHelperLocator.GetOptions(),
                     cancellationToken)
                 .ConfigureAwait(false);
-            return FromElevation(response, prepared.Backup);
+            var elevatedResult = FromElevation(response, prepared.Backup);
+            LogManagementResult("registration_removal.completed", elevatedResult);
+            return elevatedResult;
         }
 
         var result = await _removalService
             .ExecuteLocalAsync(prepared, cancellationToken)
             .ConfigureAwait(false);
-        return result.MutationResult?.Succeeded == true
+        var localResult = result.MutationResult?.Succeeded == true
             ? Success("菜单注册已删除。", result.Backup)
             : Failure(result.MutationResult?.ErrorMessage, result.Backup);
+        LogManagementResult("registration_removal.completed", localResult);
+        return localResult;
     }
 
     public Task<RegistryRestorePlan> CreateRestorePlanAsync(
@@ -217,6 +270,16 @@ public sealed class ContextMenuManagementService : IContextMenuManagementService
         bool acceptConflicts,
         CancellationToken cancellationToken)
     {
+        _logger.Log(
+            AppLogLevel.Information,
+            "restore.started",
+            "Context-menu restore started.",
+            new Dictionary<string, object?>
+            {
+                ["backupId"] = plan.Manifest.BackupId,
+                ["mode"] = plan.Mode.ToString(),
+                ["conflictCount"] = plan.Preflight.Conflicts.Count,
+            });
         var requiresElevation = plan.MutationPlan.Mutations.Any(static mutation =>
             mutation.Source.Hive == RightMenuCheck.Core.Inventory.RegistryHiveKind.LocalMachine);
         if (requiresElevation)
@@ -227,21 +290,52 @@ public sealed class ContextMenuManagementService : IContextMenuManagementService
                     ElevatedHelperLocator.GetOptions(),
                     cancellationToken)
                 .ConfigureAwait(false);
-            return FromElevation(response, Backup: null);
+            var elevatedResult = FromElevation(response, Backup: null);
+            LogManagementResult("restore.completed", elevatedResult);
+            return elevatedResult;
         }
 
         var result = await _restoreService
             .ExecuteAsync(plan, acceptConflicts, cancellationToken)
             .ConfigureAwait(false);
-        return result.Succeeded
+        var localResult = result.Succeeded
             ? Success("备份已恢复。", Backup: null)
             : Failure(result.ErrorMessage, Backup: null);
+        LogManagementResult("restore.completed", localResult);
+        return localResult;
     }
 
-    public Task<ApplicationUninstallExecutionResult> ExecuteUninstallAsync(
+    public async Task<ApplicationUninstallExecutionResult> ExecuteUninstallAsync(
         ApplicationUninstallPlan plan,
-        CancellationToken cancellationToken) =>
-        _uninstallService.ExecuteAsync(plan, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        _logger.Log(
+            AppLogLevel.Warning,
+            "uninstall.started",
+            "Application uninstaller started.",
+            new Dictionary<string, object?>
+            {
+                ["owner"] = plan.Owner.DisplayName,
+                ["method"] = plan.Method.ToString(),
+            });
+        var result = await _uninstallService
+            .ExecuteAsync(plan, cancellationToken)
+            .ConfigureAwait(false);
+        _logger.Log(
+            result.Completed ? AppLogLevel.Information : AppLogLevel.Warning,
+            "uninstall.completed",
+            "Application uninstaller completed.",
+            new Dictionary<string, object?>
+            {
+                ["owner"] = plan.Owner.DisplayName,
+                ["started"] = result.Started,
+                ["completed"] = result.Completed,
+                ["cancelled"] = result.Cancelled,
+                ["exitCode"] = result.ExitCode,
+                ["errorType"] = result.ErrorType,
+            });
+        return result;
+    }
 
     private static ManagementExecutionResult FromElevation(
         ElevationResponse response,
@@ -269,6 +363,20 @@ public sealed class ContextMenuManagementService : IContextMenuManagementService
             Cancelled: false,
             message ?? "操作失败。",
             Backup);
+
+    private void LogManagementResult(string eventName, ManagementExecutionResult result)
+    {
+        _logger.Log(
+            result.Succeeded ? AppLogLevel.Information : AppLogLevel.Warning,
+            eventName,
+            result.Message,
+            new Dictionary<string, object?>
+            {
+                ["succeeded"] = result.Succeeded,
+                ["cancelled"] = result.Cancelled,
+                ["backupId"] = result.Backup?.BackupId,
+            });
+    }
 }
 
 internal static class ElevatedHelperLocator

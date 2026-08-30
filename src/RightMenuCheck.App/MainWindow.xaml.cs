@@ -1,5 +1,4 @@
 ﻿using System.Windows;
-using RightMenuCheck.App.Services;
 using RightMenuCheck.App.ViewModels;
 
 namespace RightMenuCheck.App;
@@ -10,12 +9,11 @@ public partial class MainWindow : Window
         DataContext as MainWindowViewModel ??
         throw new InvalidOperationException("MainWindowViewModel is not configured.");
 
-    public MainWindow()
+    public MainWindow(MainWindowViewModel viewModel)
     {
+        ArgumentNullException.ThrowIfNull(viewModel);
         InitializeComponent();
-        DataContext = new MainWindowViewModel(
-            new ContextMenuDataService(),
-            new ContextMenuManagementService());
+        DataContext = viewModel;
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
     }
