@@ -6,6 +6,7 @@
     <Project Path="src/RightMenuCheck.Elevated/RightMenuCheck.Elevated.csproj" />
     <Project Path="src/RightMenuCheck.Probe.Protocol/RightMenuCheck.Probe.Protocol.csproj" />
     <Project Path="src/RightMenuCheck.Probe.Worker/RightMenuCheck.Probe.Worker.csproj" />
+    <Project Path="src/RightMenuCheck.Updater/RightMenuCheck.Updater.csproj" />
     <Project Path="src/RightMenuCheck.Windows/RightMenuCheck.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
@@ -13,6 +14,7 @@
     <Project Path="tests/RightMenuCheck.Distribution.Tests/RightMenuCheck.Distribution.Tests.csproj" />
     <Project Path="tests/RightMenuCheck.IntegrationTests/RightMenuCheck.IntegrationTests.csproj" />
     <Project Path="tests/RightMenuCheck.Probe.FaultWorker/RightMenuCheck.Probe.FaultWorker.csproj" />
+    <Project Path="tests/RightMenuCheck.Updater.Tests/RightMenuCheck.Updater.Tests.csproj" />
     <Project Path="tests/RightMenuCheck.Uninstall.Fixture/RightMenuCheck.Uninstall.Fixture.csproj" />
     <Project Path="tests/RightMenuCheck.Windows.Tests/RightMenuCheck.Windows.Tests.csproj" />
   </Folder>

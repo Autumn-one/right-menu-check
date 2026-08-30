@@ -61,6 +61,19 @@ $helperOutput = Join-Path $publishRoot 'helpers'
     @commonPublishArguments
 if ($LASTEXITCODE -ne 0) { throw 'Elevated helper publish failed.' }
 
+$updaterOutput = Join-Path $publishRoot 'helpers\updater'
+& dotnet publish `
+    (Join-Path $repoRoot 'src\RightMenuCheck.Updater\RightMenuCheck.Updater.csproj') `
+    --runtime win-x64 `
+    --output $updaterOutput `
+    -p:PublishSingleFile=true `
+    -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:EnableCompressionInSingleFile=true `
+    -p:DebugType=None `
+    -p:DebugSymbols=false `
+    @commonPublishArguments
+if ($LASTEXITCODE -ne 0) { throw 'Updater publish failed.' }
+
 $buildInfo = [ordered]@{
     product = 'RightMenuCheck'
     version = '0.1.0'
@@ -68,6 +81,7 @@ $buildInfo = [ordered]@{
     builtAtUtc = [DateTimeOffset]::UtcNow.ToString('O', [Globalization.CultureInfo]::InvariantCulture)
     applicationRuntime = 'win-x64'
     workerRuntimes = @('win-x64', 'win-x86', 'win-arm64')
+    updaterRuntime = 'win-x64'
     selfContained = $true
 }
 $buildInfo | ConvertTo-Json -Depth 4 | Set-Content `
@@ -80,6 +94,7 @@ $requiredFiles = @(
     (Join-Path $publishRoot 'workers\x86\RightMenuCheck.Probe.Worker.exe'),
     (Join-Path $publishRoot 'workers\arm64\RightMenuCheck.Probe.Worker.exe'),
     (Join-Path $publishRoot 'helpers\RightMenuCheck.Elevated.exe'),
+    (Join-Path $publishRoot 'helpers\updater\RightMenuCheck.Updater.exe'),
     (Join-Path $publishRoot 'build-info.json')
 )
 foreach ($requiredFile in $requiredFiles) {
