@@ -1,4 +1,7 @@
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using Microsoft.Win32.SafeHandles;
 using RightMenuCheck.Core.Backup;
 using RightMenuCheck.Core.Inventory;
 using System.Security.AccessControl;
@@ -16,8 +19,11 @@ public interface IRegistryWriter
     void RestoreKeyTree(RegistrySource root, IReadOnlyList<RegistryKeySnapshot> keys);
 }
 
-public sealed class SystemRegistryWriter : IRegistryWriter
+public sealed partial class SystemRegistryWriter : IRegistryWriter
 {
+    private const int ErrorSuccess = 0;
+    private const int ErrorFileNotFound = 2;
+    private const int ErrorPathNotFound = 3;
     private const AccessControlSections BackupSections =
         AccessControlSections.Access |
         AccessControlSections.Owner |
@@ -45,17 +51,12 @@ public sealed class SystemRegistryWriter : IRegistryWriter
     {
         RegistryMutationPolicy.Validate(source);
         var normalized = source.KeyPath.Replace('/', '\\').Trim('\\');
-        var separator = normalized.LastIndexOf('\\');
-        if (separator <= 0 || separator == normalized.Length - 1)
-        {
-            throw new InvalidOperationException("Registry key tree target has no safe parent.");
-        }
-
-        var parentPath = normalized[..separator];
-        var childName = normalized[(separator + 1)..];
         using var baseKey = OpenBaseKey(source);
-        using var parent = baseKey.OpenSubKey(parentPath, writable: true);
-        parent?.DeleteSubKeyTree(childName, throwOnMissingSubKey: false);
+        var error = RegDeleteTree(baseKey.Handle, normalized);
+        if (error is not (ErrorSuccess or ErrorFileNotFound or ErrorPathNotFound))
+        {
+            throw new Win32Exception(error);
+        }
     }
 
     public void RestoreKeyTree(RegistrySource root, IReadOnlyList<RegistryKeySnapshot> keys)
@@ -138,4 +139,8 @@ public sealed class SystemRegistryWriter : IRegistryWriter
     private static bool IsSameOrChildPath(string candidate, string root) =>
         candidate.Equals(root, StringComparison.OrdinalIgnoreCase) ||
         candidate.StartsWith($"{root.TrimEnd('\\')}\\", StringComparison.OrdinalIgnoreCase);
+
+    [LibraryImport("advapi32.dll", EntryPoint = "RegDeleteTreeW",
+        StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int RegDeleteTree(SafeRegistryHandle key, string subKey);
 }

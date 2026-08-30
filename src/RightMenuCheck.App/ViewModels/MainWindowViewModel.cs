@@ -4,9 +4,13 @@ using System.IO;
 using System.Security;
 using System.Windows.Data;
 using RightMenuCheck.App.Services;
+using RightMenuCheck.Core.Backup;
 using RightMenuCheck.Core.Inventory;
+using RightMenuCheck.Core.Metadata;
 using RightMenuCheck.Probe.Protocol;
+using RightMenuCheck.Windows.Backup;
 using RightMenuCheck.Windows.Benchmark;
+using RightMenuCheck.Windows.Management;
 
 namespace RightMenuCheck.App.ViewModels;
 
@@ -25,6 +29,7 @@ public sealed record MenuCategoryOption(MenuCategoryFilter Value, string Label);
 public sealed class MainWindowViewModel : ObservableObject, IDisposable
 {
     private readonly IContextMenuDataService _dataService;
+    private readonly IContextMenuManagementService _managementService;
     private CancellationTokenSource? _operationCancellation;
     private MenuCategoryFilter _selectedCategory;
     private string _searchText = string.Empty;
@@ -42,9 +47,13 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private ContextMenuRowViewModel? _selectedItem;
     private string _aggregateResult = "未测试";
 
-    public MainWindowViewModel(IContextMenuDataService dataService)
+    public MainWindowViewModel(
+        IContextMenuDataService dataService,
+        IContextMenuManagementService managementService)
     {
         _dataService = dataService ?? throw new ArgumentNullException(nameof(dataService));
+        _managementService = managementService ??
+                             throw new ArgumentNullException(nameof(managementService));
         ItemsView = CollectionViewSource.GetDefaultView(Items);
         ItemsView.Filter = FilterItem;
         ApplyDefaultSort();
@@ -188,8 +197,19 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public ContextMenuRowViewModel? SelectedItem
     {
         get => _selectedItem;
-        set => SetProperty(ref _selectedItem, value);
+        set
+        {
+            if (SetProperty(ref _selectedItem, value))
+            {
+                OnPropertyChanged(nameof(HasSelectedItem));
+                OnPropertyChanged(nameof(StateActionLabel));
+            }
+        }
     }
+
+    public bool HasSelectedItem => SelectedItem is not null;
+
+    public string StateActionLabel => SelectedItem?.IsEnabled == false ? "启用" : "禁用";
 
     public string AggregateResult
     {
@@ -381,6 +401,289 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     public void Cancel() => _operationCancellation?.Cancel();
+
+    public ContextMenuStatePlan? PreviewSelectedState()
+    {
+        if (SelectedItem is null)
+        {
+            return null;
+        }
+
+        return _managementService.PreviewState(
+            SelectedItem.Metadata,
+            SelectedItem.IsEnabled
+                ? ContextMenuStateAction.Disable
+                : ContextMenuStateAction.Enable);
+    }
+
+    public ContextMenuRemovalPlan? PreviewSelectedRemoval() => SelectedItem is null
+        ? null
+        : _managementService.PreviewRemoval(SelectedItem.Metadata);
+
+    public ApplicationUninstallPlan? PreviewSelectedUninstall() =>
+        SelectedItem?.Metadata.Owner is { } owner
+            ? _managementService.PreviewUninstall(owner)
+            : null;
+
+    public async Task BackupAsync(
+        string backupPath,
+        IReadOnlyList<ContextMenuRowViewModel> selectedItems)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        var rows = selectedItems.Count > 0
+            ? selectedItems.Distinct().ToArray()
+            : SelectedItem is null
+                ? []
+                : [SelectedItem];
+        if (rows.Length == 0)
+        {
+            StatusText = "请选择至少一个菜单项";
+            return;
+        }
+
+        BeginOperation("正在创建备份…");
+        try
+        {
+            var artifact = await _managementService.CreateBackupAsync(
+                backupPath,
+                rows.Select(static row => row.Metadata).ToArray(),
+                BackupPurpose.Manual,
+                _operationCancellation!.Token);
+            StatusText = $"备份完成 · {artifact.RegistryKeyCount} 个注册键";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "备份已取消";
+        }
+        catch (BackupIncompleteException exception)
+        {
+            StatusText = $"备份不完整：{exception.Issues.Count} 个问题";
+        }
+        catch (IOException exception)
+        {
+            StatusText = exception.Message;
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            StatusText = exception.Message;
+        }
+        finally
+        {
+            EndOperation();
+        }
+    }
+
+    public async Task<ManagementExecutionResult?> ExecuteSelectedStateAsync(string backupPath)
+    {
+        if (IsBusy || SelectedItem is null)
+        {
+            return null;
+        }
+
+        var selected = SelectedItem;
+        var action = selected.IsEnabled
+            ? ContextMenuStateAction.Disable
+            : ContextMenuStateAction.Enable;
+        BeginOperation(action == ContextMenuStateAction.Disable
+            ? "正在禁用菜单项…"
+            : "正在启用菜单项…");
+        ManagementExecutionResult? result = null;
+        try
+        {
+            result = await _managementService.ExecuteStateAsync(
+                selected.Metadata,
+                action,
+                backupPath,
+                _operationCancellation!.Token);
+            StatusText = result.Message;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "操作已取消";
+        }
+        catch (InvalidOperationException exception)
+        {
+            StatusText = exception.Message;
+        }
+        catch (IOException exception)
+        {
+            StatusText = exception.Message;
+        }
+        finally
+        {
+            EndOperation();
+        }
+
+        if (result?.Succeeded == true)
+        {
+            await ScanAsync();
+        }
+
+        return result;
+    }
+
+    public async Task<ManagementExecutionResult?> ExecuteSelectedRemovalAsync(string backupPath)
+    {
+        if (IsBusy || SelectedItem is null)
+        {
+            return null;
+        }
+
+        var selected = SelectedItem;
+        BeginOperation("正在删除菜单注册…");
+        ManagementExecutionResult? result = null;
+        try
+        {
+            result = await _managementService.ExecuteRemovalAsync(
+                selected.Metadata,
+                backupPath,
+                _operationCancellation!.Token);
+            StatusText = result.Message;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "操作已取消";
+        }
+        catch (InvalidOperationException exception)
+        {
+            StatusText = exception.Message;
+        }
+        catch (IOException exception)
+        {
+            StatusText = exception.Message;
+        }
+        finally
+        {
+            EndOperation();
+        }
+
+        if (result?.Succeeded == true)
+        {
+            await ScanAsync();
+        }
+
+        return result;
+    }
+
+    public Task<RegistryRestorePlan> CreateRestorePlanAsync(string backupPath) =>
+        _managementService.CreateRestorePlanAsync(
+            backupPath,
+            RegistryRestoreMode.Exact,
+            CancellationToken.None);
+
+    public async Task<ManagementExecutionResult?> ExecuteRestoreAsync(
+        RegistryRestorePlan plan,
+        bool acceptConflicts)
+    {
+        if (IsBusy)
+        {
+            return null;
+        }
+
+        BeginOperation("正在恢复菜单注册…");
+        ManagementExecutionResult? result = null;
+        try
+        {
+            result = await _managementService.ExecuteRestoreAsync(
+                plan,
+                acceptConflicts,
+                _operationCancellation!.Token);
+            StatusText = result.Message;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "恢复已取消";
+        }
+        catch (InvalidOperationException exception)
+        {
+            StatusText = exception.Message;
+        }
+        catch (IOException exception)
+        {
+            StatusText = exception.Message;
+        }
+        finally
+        {
+            EndOperation();
+        }
+
+        if (result?.Succeeded == true)
+        {
+            await ScanAsync();
+        }
+
+        return result;
+    }
+
+    public async Task<ApplicationUninstallExecutionResult?> ExecuteSelectedUninstallAsync(
+        ApplicationUninstallPlan plan,
+        string backupPath)
+    {
+        if (IsBusy || SelectedItem?.Metadata.Owner is not { } owner)
+        {
+            return null;
+        }
+
+        var ownerRegistrations = UninstallResidualDetector.FindResiduals(
+            owner,
+            Items.Select(static item => item.Metadata));
+        if (ownerRegistrations.Count == 0)
+        {
+            ownerRegistrations = [SelectedItem.Metadata];
+        }
+
+        BeginOperation("正在备份并启动卸载程序…");
+        ApplicationUninstallExecutionResult? result = null;
+        try
+        {
+            _ = await _managementService.CreateBackupAsync(
+                backupPath,
+                ownerRegistrations,
+                BackupPurpose.BeforeRemove,
+                _operationCancellation!.Token);
+            result = await _managementService.ExecuteUninstallAsync(
+                plan,
+                _operationCancellation.Token);
+            StatusText = result.Cancelled
+                ? "卸载已取消"
+                : result.Completed
+                    ? "卸载程序已完成，正在重新扫描…"
+                    : result.ErrorMessage ?? "卸载程序未成功完成";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "卸载等待已取消";
+        }
+        catch (InvalidOperationException exception)
+        {
+            StatusText = exception.Message;
+        }
+        catch (IOException exception)
+        {
+            StatusText = exception.Message;
+        }
+        finally
+        {
+            EndOperation();
+        }
+
+        if (result?.Started == true)
+        {
+            await ScanAsync();
+            var residuals = UninstallResidualDetector.FindResiduals(
+                owner,
+                Items.Select(static item => item.Metadata));
+            StatusText = residuals.Count == 0
+                ? "卸载后未发现该应用的右键菜单残留"
+                : $"卸载后仍发现 {residuals.Count} 个菜单残留";
+        }
+
+        return result;
+    }
 
     public void Dispose()
     {

@@ -13,7 +13,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new MainWindowViewModel(new ContextMenuDataService());
+        DataContext = new MainWindowViewModel(
+            new ContextMenuDataService(),
+            new ContextMenuManagementService());
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
     }

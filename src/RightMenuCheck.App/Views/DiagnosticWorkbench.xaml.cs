@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using Microsoft.Win32;
 using RightMenuCheck.App.ViewModels;
 using RightMenuCheck.Core.Inventory;
+using RightMenuCheck.Windows.Management;
 
 namespace RightMenuCheck.App.Views;
 
@@ -36,6 +37,13 @@ public partial class DiagnosticWorkbench : UserControl
         var selected = MenuGrid.SelectedItems
             .Cast<ContextMenuRowViewModel>()
             .ToArray();
+        if (selected.Length > 20 && !Confirm(
+                $"将依次测试 {selected.Length} 项，每项会启动多个隔离进程。是否继续？",
+                "确认批量测试"))
+        {
+            return;
+        }
+
         await ViewModel.BenchmarkAsync(selected);
     }
 
@@ -80,6 +88,147 @@ public partial class DiagnosticWorkbench : UserControl
 
     private void ClearSample_Click(object sender, RoutedEventArgs e) =>
         ViewModel.SamplePath = string.Empty;
+
+    private async void BackupSelected_Click(object sender, RoutedEventArgs e)
+    {
+        var backupPath = SelectBackupPath("menu-backup");
+        if (backupPath is null)
+        {
+            return;
+        }
+
+        await ViewModel.BackupAsync(backupPath, GetSelectedRows());
+    }
+
+    private async void ToggleState_Click(object sender, RoutedEventArgs e)
+    {
+        var plan = ViewModel.PreviewSelectedState();
+        if (plan is null || !plan.IsSupported)
+        {
+            ShowInformation(plan?.BlockReason ?? "请选择一个菜单项。", "无法更改状态");
+            return;
+        }
+
+        if (plan.IsNoChange)
+        {
+            ShowInformation("当前状态无需更改。", "菜单状态");
+            return;
+        }
+
+        var actionName = plan.Action == ContextMenuStateAction.Disable ? "禁用" : "启用";
+        var confirmation = $"{actionName}“{ViewModel.SelectedItem?.DisplayName}”？\n\n" +
+                           $"{plan.ImpactDescription}\n\n操作前将强制创建备份。";
+        if (!Confirm(confirmation, $"确认{actionName}"))
+        {
+            return;
+        }
+
+        var backupPath = SelectBackupPath($"before-{actionName}");
+        if (backupPath is not null)
+        {
+            _ = await ViewModel.ExecuteSelectedStateAsync(backupPath);
+        }
+    }
+
+    private async void RemoveRegistration_Click(object sender, RoutedEventArgs e)
+    {
+        var plan = ViewModel.PreviewSelectedRemoval();
+        if (plan is null || !plan.IsSupported)
+        {
+            ShowInformation(plan?.BlockReason ?? "请选择一个菜单项。", "无法删除注册");
+            return;
+        }
+
+        if (plan.IsNoChange)
+        {
+            ShowInformation("该注册键已经不存在。", "删除注册");
+            return;
+        }
+
+        var message = $"删除“{ViewModel.SelectedItem?.DisplayName}”的菜单注册？\n\n" +
+                      $"{plan.ImpactDescription}\n\n删除前将强制创建可恢复备份。";
+        if (!Confirm(message, "确认删除注册"))
+        {
+            return;
+        }
+
+        var backupPath = SelectBackupPath("before-remove");
+        if (backupPath is not null)
+        {
+            _ = await ViewModel.ExecuteSelectedRemovalAsync(backupPath);
+        }
+    }
+
+    private async void Restore_Click(object sender, RoutedEventArgs e)
+    {
+        var owner = Window.GetWindow(this);
+        var dialog = new OpenFileDialog
+        {
+            CheckFileExists = true,
+            Filter = "RightMenuCheck 备份 (*.rmcbak)|*.rmcbak",
+            Multiselect = false,
+            Title = "选择要恢复的备份",
+        };
+        if (dialog.ShowDialog(owner) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var plan = await ViewModel.CreateRestorePlanAsync(dialog.FileName);
+            if (!plan.CanExecute)
+            {
+                ShowInformation(plan.BlockReason ?? "备份无法恢复。", "恢复被阻止");
+                return;
+            }
+
+            var message = "以 Exact 模式恢复此备份？\n\n" +
+                          $"创建键：{plan.Preflight.KeysToCreate}\n" +
+                          $"更新键：{plan.Preflight.KeysToUpdate}\n" +
+                          $"写入值：{plan.Preflight.ValuesToWrite}\n" +
+                          $"冲突：{plan.Preflight.Conflicts.Count}\n\n" +
+                          "选定注册根将按备份精确重建。";
+            if (Confirm(message, "确认恢复"))
+            {
+                _ = await ViewModel.ExecuteRestoreAsync(
+                    plan,
+                    acceptConflicts: plan.Preflight.Conflicts.Count > 0);
+            }
+        }
+        catch (InvalidDataException exception)
+        {
+            ShowInformation(exception.Message, "备份无效");
+        }
+        catch (IOException exception)
+        {
+            ShowInformation(exception.Message, "读取备份失败");
+        }
+    }
+
+    private async void UninstallApplication_Click(object sender, RoutedEventArgs e)
+    {
+        var plan = ViewModel.PreviewSelectedUninstall();
+        if (plan is null || !plan.IsSupported)
+        {
+            ShowInformation(plan?.BlockReason ?? "没有可确认的所属应用。", "无法卸载应用");
+            return;
+        }
+
+        var message = $"卸载“{plan.Owner.DisplayName}”？\n\n" +
+                      $"{plan.ImpactDescription}\n\n" +
+                      "这会删除整个应用，而不只是右键菜单。注册备份不能重新安装应用。";
+        if (!Confirm(message, "确认卸载应用"))
+        {
+            return;
+        }
+
+        var backupPath = SelectBackupPath("before-uninstall");
+        if (backupPath is not null)
+        {
+            _ = await ViewModel.ExecuteSelectedUninstallAsync(plan, backupPath);
+        }
+    }
 
     private async void Export_Click(object sender, RoutedEventArgs e)
     {
@@ -138,4 +287,38 @@ public partial class DiagnosticWorkbench : UserControl
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
     }
+
+    private ContextMenuRowViewModel[] GetSelectedRows() => MenuGrid.SelectedItems
+        .Cast<ContextMenuRowViewModel>()
+        .ToArray();
+
+    private string? SelectBackupPath(string prefix)
+    {
+        var timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        var dialog = new SaveFileDialog
+        {
+            AddExtension = true,
+            DefaultExt = ".rmcbak",
+            Filter = "RightMenuCheck 备份 (*.rmcbak)|*.rmcbak",
+            FileName = $"{prefix}-{timestamp}.rmcbak",
+            OverwritePrompt = true,
+            Title = "选择备份保存位置",
+        };
+        return dialog.ShowDialog(Window.GetWindow(this)) == true ? dialog.FileName : null;
+    }
+
+    private bool Confirm(string message, string title) => MessageBox.Show(
+        Window.GetWindow(this),
+        message,
+        title,
+        MessageBoxButton.YesNo,
+        MessageBoxImage.Warning,
+        MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    private void ShowInformation(string message, string title) => MessageBox.Show(
+        Window.GetWindow(this),
+        message,
+        title,
+        MessageBoxButton.OK,
+        MessageBoxImage.Information);
 }

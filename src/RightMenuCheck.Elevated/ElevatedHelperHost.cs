@@ -26,6 +26,7 @@ internal static class ElevatedHelperHost
             arguments.PipeName,
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
+        ElevationRequest? activeRequest = null;
 
         try
         {
@@ -33,6 +34,7 @@ internal static class ElevatedHelperHost
             var request = await ElevationMessageSerializer
                 .ReadRequestAsync(pipe, timeout.Token)
                 .ConfigureAwait(false);
+            activeRequest = request;
             var validation = ElevationRequestValidator.ValidateEnvelope(request, arguments.Nonce);
             if (!validation.IsValid)
             {
@@ -194,9 +196,31 @@ internal static class ElevatedHelperHost
             return 9;
         }
 #pragma warning disable CA1031
-        catch (Exception)
+        catch (Exception exception)
 #pragma warning restore CA1031
         {
+            if (activeRequest is not null && pipe.IsConnected)
+            {
+                try
+                {
+                    await WriteResponseAsync(
+                            pipe,
+                            activeRequest,
+                            arguments.Nonce,
+                            ElevationOutcome.Failed,
+                            mutationResult: null,
+                            exception.GetType().Name,
+                            exception.Message,
+                            CancellationToken.None)
+                        .ConfigureAwait(false);
+                }
+#pragma warning disable CA1031
+                catch (Exception)
+#pragma warning restore CA1031
+                {
+                }
+            }
+
             return 10;
         }
     }

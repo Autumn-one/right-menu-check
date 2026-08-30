@@ -132,19 +132,34 @@
           </Button>
         </Grid>
 
-        <Button Grid.Column="6"
-                Style="{StaticResource ToolbarButtonStyle}"
-                Margin="10,0,0,0"
-                IsEnabled="{Binding CanStart}"
-                Click="Export_Click">
-          <StackPanel Orientation="Horizontal">
-            <TextBlock FontFamily="Segoe Fluent Icons"
-                       FontSize="14"
-                       Text="&#xEDE1;"
-                       Margin="0,0,7,0" />
-            <TextBlock Text="导出结果" />
-          </StackPanel>
-        </Button>
+        <StackPanel Grid.Column="6"
+                    Orientation="Horizontal"
+                    Margin="10,0,0,0"
+                    VerticalAlignment="Center">
+          <Button Style="{StaticResource ToolbarButtonStyle}"
+                  IsEnabled="{Binding CanStart}"
+                  Click="Restore_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe Fluent Icons"
+                         FontSize="14"
+                         Text="&#xE777;"
+                         Margin="0,0,7,0" />
+              <TextBlock Text="恢复备份" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource ToolbarButtonStyle}"
+                  Margin="0"
+                  IsEnabled="{Binding CanStart}"
+                  Click="Export_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe Fluent Icons"
+                         FontSize="14"
+                         Text="&#xEDE1;"
+                         Margin="0,0,7,0" />
+              <TextBlock Text="导出结果" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 
@@ -363,6 +378,48 @@
                        FontWeight="SemiBold"
                        Margin="0,12,0,0"
                        TextWrapping="Wrap" />
+            <WrapPanel Margin="0,12,0,2">
+              <Button Style="{StaticResource ToolbarButtonStyle}"
+                      IsEnabled="{Binding HasSelectedItem}"
+                      Click="BackupSelected_Click">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock FontFamily="Segoe Fluent Icons"
+                             Text="&#xE74E;"
+                             Margin="0,0,6,0" />
+                  <TextBlock Text="备份" />
+                </StackPanel>
+              </Button>
+              <Button Style="{StaticResource ToolbarButtonStyle}"
+                      IsEnabled="{Binding HasSelectedItem}"
+                      Click="ToggleState_Click">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock FontFamily="Segoe Fluent Icons"
+                             Text="&#xE7E8;"
+                             Margin="0,0,6,0" />
+                  <TextBlock Text="{Binding StateActionLabel}" />
+                </StackPanel>
+              </Button>
+              <Button Style="{StaticResource ToolbarButtonStyle}"
+                      IsEnabled="{Binding HasSelectedItem}"
+                      Click="RemoveRegistration_Click">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock FontFamily="Segoe Fluent Icons"
+                             Text="&#xE74D;"
+                             Margin="0,0,6,0" />
+                  <TextBlock Text="删除注册" />
+                </StackPanel>
+              </Button>
+              <Button Style="{StaticResource ToolbarButtonStyle}"
+                      IsEnabled="{Binding HasSelectedItem}"
+                      Click="UninstallApplication_Click">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock FontFamily="Segoe Fluent Icons"
+                             Text="&#xE7B8;"
+                             Margin="0,0,6,0" />
+                  <TextBlock Text="卸载应用" />
+                </StackPanel>
+              </Button>
+            </WrapPanel>
             <TextBlock Text="所属应用" Style="{StaticResource DetailLabelStyle}" />
             <TextBlock Text="{Binding SelectedItem.OwnerName}" Style="{StaticResource DetailValueStyle}" />
             <TextBlock Text="发布者" Style="{StaticResource DetailLabelStyle}" />
