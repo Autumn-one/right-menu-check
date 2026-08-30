@@ -93,8 +93,8 @@ public sealed class ContextMenuRegistryScanner
         var ordered = registrations
             .OrderBy(static item => item.TargetKind)
             .ThenBy(static item => item.DisplayName, StringComparer.CurrentCultureIgnoreCase)
-            .ThenBy(static item => item.Source.View)
-            .ThenBy(static item => item.Source.Hive)
+            .ThenBy(static item => GetRegistrySource(item).View)
+            .ThenBy(static item => GetRegistrySource(item).Hive)
             .ThenBy(static item => item.RegistrationPath, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -116,7 +116,7 @@ public sealed class ContextMenuRegistryScanner
                 var path = Combine(ShellExtensionsRoot, "Blocked");
                 foreach (var valueName in SafeGetValueNames(hive, view, path, issues))
                 {
-                    if (NormalizeClsid(valueName) is { } clsid)
+                    if (ClsidUtilities.Normalize(valueName) is { } clsid)
                     {
                         blocked.Add(clsid);
                     }
@@ -200,7 +200,8 @@ public sealed class ContextMenuRegistryScanner
         {
             var registrationPath = Combine(handlersPath, handlerName);
             var rawDefaultValue = ReadString(hive, view, registrationPath, valueName: null, issues);
-            var handlerClsid = NormalizeClsid(rawDefaultValue) ?? NormalizeClsid(handlerName);
+            var handlerClsid = ClsidUtilities.Normalize(rawDefaultValue) ??
+                               ClsidUtilities.Normalize(handlerName);
             var status = IsBlocked(blockedClsids, handlerClsid)
                 ? ContextMenuRegistrationStatus.Blocked
                 : ContextMenuRegistrationStatus.None;
@@ -208,7 +209,8 @@ public sealed class ContextMenuRegistryScanner
             registrations.Add(new ContextMenuRegistration
             {
                 Id = CreateId(hive, view, registrationPath),
-                Source = new RegistrySource(hive, view, registrationPath),
+                Source = new RegistryContextMenuSource(
+                    new RegistrySource(hive, view, registrationPath)),
                 ClassPath = classPath,
                 RegistrationPath = registrationPath,
                 CanonicalName = handlerName,
@@ -243,12 +245,12 @@ public sealed class ContextMenuRegistryScanner
             var nestedShellPath = Combine(verbPath, "shell");
             var nestedVerbNames = SafeGetSubKeyNames(hive, view, nestedShellPath, issues);
 
-            var explorerCommandClsid = NormalizeClsid(
+            var explorerCommandClsid = ClsidUtilities.Normalize(
                 ReadString(hive, view, verbPath, "ExplorerCommandHandler", issues));
-            var delegateExecuteClsid = NormalizeClsid(
+            var delegateExecuteClsid = ClsidUtilities.Normalize(
                 ReadString(hive, view, commandPath, "DelegateExecute", issues) ??
                 ReadString(hive, view, verbPath, "DelegateExecute", issues));
-            var commandStateHandlerClsid = NormalizeClsid(
+            var commandStateHandlerClsid = ClsidUtilities.Normalize(
                 ReadString(hive, view, verbPath, "CommandStateHandler", issues));
             var subCommands = ParseSubCommands(
                 ReadString(hive, view, verbPath, "SubCommands", issues));
@@ -282,7 +284,8 @@ public sealed class ContextMenuRegistryScanner
             registrations.Add(new ContextMenuRegistration
             {
                 Id = id,
-                Source = new RegistrySource(hive, view, verbPath),
+                Source = new RegistryContextMenuSource(
+                    new RegistrySource(hive, view, verbPath)),
                 ClassPath = classPath,
                 RegistrationPath = verbPath,
                 CanonicalName = verbName,
@@ -402,14 +405,15 @@ public sealed class ContextMenuRegistryScanner
     private static void MarkCurrentUserOverrides(List<ContextMenuRegistration> registrations)
     {
         var currentUserPaths = registrations
-            .Where(static item => item.Source.Hive == RegistryHiveKind.CurrentUser)
+            .Where(static item =>
+                GetRegistrySource(item).Hive == RegistryHiveKind.CurrentUser)
             .Select(CreateOverrideKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         for (var index = 0; index < registrations.Count; index++)
         {
             var registration = registrations[index];
-            if (registration.Source.Hive == RegistryHiveKind.LocalMachine &&
+            if (GetRegistrySource(registration).Hive == RegistryHiveKind.LocalMachine &&
                 currentUserPaths.Contains(CreateOverrideKey(registration)))
             {
                 registrations[index] = registration with
@@ -422,7 +426,7 @@ public sealed class ContextMenuRegistryScanner
     }
 
     private static string CreateOverrideKey(ContextMenuRegistration registration) =>
-        $"{registration.Source.View}|{registration.Kind}|{registration.RegistrationPath}";
+        $"{GetRegistrySource(registration).View}|{registration.Kind}|{registration.RegistrationPath}";
 
     private static bool ContainsMenuContainer(IReadOnlyList<string> childNames) =>
         childNames.Contains("shell", StringComparer.OrdinalIgnoreCase) ||
@@ -537,21 +541,14 @@ public sealed class ContextMenuRegistryScanner
     private static bool IsBlocked(HashSet<string> blockedClsids, string? clsid) =>
         clsid is not null && blockedClsids.Contains(clsid);
 
-    private static string? NormalizeClsid(string? value)
-    {
-        if (value is null || !Guid.TryParse(value.Trim(), out var guid))
-        {
-            return null;
-        }
-
-        return guid.ToString("B").ToUpperInvariant();
-    }
-
     private static string CreateId(
         RegistryHiveKind hive,
         RegistryViewKind view,
         string registrationPath) =>
         $"{hive}|{view}|{registrationPath}";
+
+    private static RegistrySource GetRegistrySource(ContextMenuRegistration registration) =>
+        ((RegistryContextMenuSource)registration.Source).Location;
 
     private static string Combine(params string[] parts) =>
         string.Join('\\', parts.Where(static part => !string.IsNullOrWhiteSpace(part)))

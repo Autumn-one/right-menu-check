@@ -1,5 +1,6 @@
 using RightMenuCheck.Core.Inventory;
 using RightMenuCheck.Windows.Inventory;
+using RightMenuCheck.Windows.Packages;
 using RightMenuCheck.Windows.Registry;
 
 namespace RightMenuCheck.IntegrationTests.Inventory;
@@ -36,5 +37,30 @@ public sealed class SystemRegistryInventoryTests
                 "Software\\Classes\\",
                 item.RegistrationPath,
                 StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ScanReadsInstalledPackageManifestsWithoutChangingPackages()
+    {
+        var scanner = new PackagedContextMenuScanner(
+            new SystemInstalledPackageCatalog(),
+            new PhysicalManifestStreamProvider());
+
+        var result = scanner.Scan(CancellationToken.None);
+
+        Assert.NotEmpty(result.Registrations);
+        Assert.All(result.Registrations, item =>
+        {
+            Assert.Equal(ContextMenuRegistrationKind.PackagedExplorerCommand, item.Kind);
+            Assert.IsType<PackageContextMenuSource>(item.Source);
+            Assert.NotNull(item.HandlerClsid);
+        });
+        Assert.Contains(
+            result.Registrations,
+            item => item.TargetKind == ContextMenuTargetKind.File);
+        Assert.Contains(
+            result.Registrations,
+            item => item.TargetKind is ContextMenuTargetKind.Folder or
+                ContextMenuTargetKind.FolderBackground);
     }
 }

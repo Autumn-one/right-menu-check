@@ -24,6 +24,29 @@ public enum ContextMenuRegistrationKind
     PackagedExplorerCommand,
 }
 
+public enum PackageArchitectureKind
+{
+    Unknown,
+    Neutral,
+    X86,
+    X64,
+    Arm,
+    Arm64,
+    X86OnArm64,
+}
+
+public abstract record ContextMenuSource;
+
+public sealed record RegistryContextMenuSource(RegistrySource Location) : ContextMenuSource;
+
+public sealed record PackageContextMenuSource(
+    string PackageName,
+    string PackageFullName,
+    string PackageFamilyName,
+    string ApplicationId,
+    PackageArchitectureKind Architecture,
+    string ManifestPath) : ContextMenuSource;
+
 [Flags]
 public enum ContextMenuRegistrationStatus
 {
@@ -39,7 +62,7 @@ public sealed record ContextMenuRegistration
 {
     public required string Id { get; init; }
 
-    public required RegistrySource Source { get; init; }
+    public required ContextMenuSource Source { get; init; }
 
     public required string ClassPath { get; init; }
 

@@ -176,12 +176,12 @@ public sealed class ContextMenuRegistryScannerTests
 
         var entries = result.Registrations.Where(item => item.CanonicalName == "share").ToArray();
         Assert.Equal(2, entries.Length);
-        var machine = Assert.Single(
-            entries,
-            item => item.Source.Hive == RegistryHiveKind.LocalMachine);
-        var user = Assert.Single(
-            entries,
-            item => item.Source.Hive == RegistryHiveKind.CurrentUser);
+        var machine = Assert.Single(entries, item =>
+            Assert.IsType<RegistryContextMenuSource>(item.Source).Location.Hive ==
+            RegistryHiveKind.LocalMachine);
+        var user = Assert.Single(entries, item =>
+            Assert.IsType<RegistryContextMenuSource>(item.Source).Location.Hive ==
+            RegistryHiveKind.CurrentUser);
         Assert.True(
             machine.Status.HasFlag(ContextMenuRegistrationStatus.CurrentUserOverridePresent));
         Assert.False(
