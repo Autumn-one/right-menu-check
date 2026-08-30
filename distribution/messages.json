@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "payload": {
+    "sequence": 1,
+    "issuedAtUtc": "2026-08-30T22:50:15.2726517+00:00",
+    "expiresAtUtc": "2027-08-30T22:50:15.2726517+00:00",
+    "messages": [
+      {
+        "id": "e2e-20260831-001",
+        "revision": 1,
+        "title": "RightMenuCheck \u66F4\u65B0\u9A8C\u8BC1",
+        "body": "\u8FD9\u662F\u4E00\u6761\u7AEF\u5230\u7AEF\u9A8C\u8BC1\u516C\u544A\uFF0C\u7528\u4E8E\u786E\u8BA4\u7B7E\u540D\u63A8\u9001\u3001\u4FEE\u8BA2\u786E\u8BA4\u548C\u64A4\u4E0B\u6D41\u7A0B\u3002",
+        "kind": "information",
+        "startsAtUtc": "2026-08-30T22:48:14+00:00",
+        "endsAtUtc": null,
+        "minimumVersion": null,
+        "maximumVersion": null
+      }
+    ]
+  },
+  "signatureAlgorithm": "ECDSA_P256_SHA256",
+  "signature": "MEYCIQDHhzlT6dRd8ixrCUpnjbKclyvTmRMk19Prsj7\u002BYBEDIAIhAN7H0hBOZVUiobf9WlG5wsEEk0D0C/R1EjJ3sPN1OJeM"
+}
