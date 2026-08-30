@@ -17,13 +17,17 @@ public partial class App : Application
     {
         base.OnStartup(e);
         _logger = StructuredFileLogger.CreateDefault("app");
+        var assembly = Assembly.GetExecutingAssembly();
         _logger.Log(
             AppLogLevel.Information,
             "app.started",
             "RightMenuCheck started.",
             new Dictionary<string, object?>
             {
-                ["version"] = Assembly.GetExecutingAssembly().GetName().Version?.ToString(),
+                ["version"] = assembly.GetName().Version?.ToString(),
+                ["informationalVersion"] = assembly
+                    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                    .InformationalVersion,
                 ["architecture"] = RuntimeInformation.ProcessArchitecture.ToString(),
                 ["osVersion"] = Environment.OSVersion.VersionString,
                 ["executablePath"] = Environment.ProcessPath,
