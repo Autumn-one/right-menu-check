@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/RightMenuCheck.App/RightMenuCheck.App.csproj" />
     <Project Path="src/RightMenuCheck.Core/RightMenuCheck.Core.csproj" />
+    <Project Path="src/RightMenuCheck.Distribution/RightMenuCheck.Distribution.csproj" />
     <Project Path="src/RightMenuCheck.Elevated/RightMenuCheck.Elevated.csproj" />
     <Project Path="src/RightMenuCheck.Probe.Protocol/RightMenuCheck.Probe.Protocol.csproj" />
     <Project Path="src/RightMenuCheck.Probe.Worker/RightMenuCheck.Probe.Worker.csproj" />
@@ -9,6 +10,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RightMenuCheck.Core.Tests/RightMenuCheck.Core.Tests.csproj" />
+    <Project Path="tests/RightMenuCheck.Distribution.Tests/RightMenuCheck.Distribution.Tests.csproj" />
     <Project Path="tests/RightMenuCheck.IntegrationTests/RightMenuCheck.IntegrationTests.csproj" />
     <Project Path="tests/RightMenuCheck.Probe.FaultWorker/RightMenuCheck.Probe.FaultWorker.csproj" />
     <Project Path="tests/RightMenuCheck.Uninstall.Fixture/RightMenuCheck.Uninstall.Fixture.csproj" />

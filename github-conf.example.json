@@ -1,0 +1,13 @@
+{
+  "repo": "owner/right-menu-check",
+  "token": "github_pat_replace_me",
+  "mirrors": [
+    "https://ghfast.top/",
+    "https://gh-proxy.com/"
+  ],
+  "signingPrivateKeyPath": ".secrets/update-signing-private.pem",
+  "telemetry": {
+    "publicBaseUrl": "https://telemetry.example.com/",
+    "adminToken": "replace_me"
+  }
+}

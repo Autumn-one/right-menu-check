@@ -5,6 +5,8 @@
 
 # dotenv files
 .env
+github-conf.json
+.secrets/
 
 # User-specific files
 *.rsuser
