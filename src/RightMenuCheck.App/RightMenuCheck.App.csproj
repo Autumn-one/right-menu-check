@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RightMenuCheck.Core\RightMenuCheck.Core.csproj" />
+    <ProjectReference Include="..\RightMenuCheck.Probe.Protocol\RightMenuCheck.Probe.Protocol.csproj" />
+    <ProjectReference Include="..\RightMenuCheck.Windows\RightMenuCheck.Windows.csproj" />
+  </ItemGroup>
+
+</Project>
