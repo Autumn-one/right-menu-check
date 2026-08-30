@@ -1,2 +1,3 @@
-﻿// See https://aka.ms/new-console-template for more information
-Console.WriteLine("Hello, World!");
+using RightMenuCheck.Probe.Worker;
+
+return await ProbeWorkerHost.RunAsync(args, CancellationToken.None);

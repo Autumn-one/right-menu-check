@@ -10,6 +10,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/RightMenuCheck.Core.Tests/RightMenuCheck.Core.Tests.csproj" />
     <Project Path="tests/RightMenuCheck.IntegrationTests/RightMenuCheck.IntegrationTests.csproj" />
+    <Project Path="tests/RightMenuCheck.Probe.FaultWorker/RightMenuCheck.Probe.FaultWorker.csproj" />
     <Project Path="tests/RightMenuCheck.Windows.Tests/RightMenuCheck.Windows.Tests.csproj" />
   </Folder>
 </Solution>
