@@ -32,6 +32,10 @@ public sealed class ContextMenuMetadataEnricher
             })
             .ToArray();
 
-        return new ContextMenuRegistrationMetadata(registration, components);
+        return new ContextMenuRegistrationMetadata(
+            registration,
+            components,
+            Owner: null,
+            Issues: []);
     }
 }

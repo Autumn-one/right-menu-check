@@ -40,6 +40,23 @@ public enum SignatureVerificationStatus
     Error,
 }
 
+public enum ApplicationOwnerKind
+{
+    Unknown,
+    InstalledApplication,
+    Package,
+    WindowsSystem,
+}
+
+public enum OwnershipConfidence
+{
+    None,
+    Low,
+    Medium,
+    High,
+    Exact,
+}
+
 public sealed record MetadataIssue(
     string Component,
     string Operation,
@@ -84,6 +101,23 @@ public sealed record BinaryFileMetadata(
     AuthenticodeSignatureMetadata Signature,
     IReadOnlyList<MetadataIssue> Issues);
 
+public sealed record ApplicationOwnerMetadata(
+    ApplicationOwnerKind Kind,
+    OwnershipConfidence Confidence,
+    string DisplayName,
+    string? Publisher,
+    string? Version,
+    string? InstallLocation,
+    string? ProductCode,
+    string? PackageFullName,
+    RegistrySource? UninstallRegistrySource,
+    string? UninstallKeyName,
+    string? UninstallString,
+    string? QuietUninstallString,
+    bool IsWindowsInstaller,
+    bool IsSystemProtected,
+    string MatchReason);
+
 public sealed record HandlerComponentMetadata(
     HandlerComponentRole Role,
     string Clsid,
@@ -93,4 +127,6 @@ public sealed record HandlerComponentMetadata(
 
 public sealed record ContextMenuRegistrationMetadata(
     ContextMenuRegistration Registration,
-    IReadOnlyList<HandlerComponentMetadata> Components);
+    IReadOnlyList<HandlerComponentMetadata> Components,
+    ApplicationOwnerMetadata? Owner,
+    IReadOnlyList<MetadataIssue> Issues);

@@ -14,7 +14,9 @@ public sealed record InstalledPackageInfo(
     PackageArchitectureKind Architecture,
     string InstallLocation,
     bool IsFramework,
-    bool IsResourcePackage);
+    bool IsResourcePackage,
+    string Publisher = "",
+    string SignatureKind = "Unknown");
 
 public sealed record PackageCatalogIssue(
     string PackageName,
@@ -73,7 +75,9 @@ public sealed class SystemInstalledPackageCatalog : IInstalledPackageCatalog
                     MapArchitecture(id.Architecture.ToString()),
                     package.InstalledLocation.Path,
                     package.IsFramework,
-                    package.IsResourcePackage));
+                    package.IsResourcePackage,
+                    id.Publisher,
+                    package.SignatureKind.ToString()));
             }
             catch (UnauthorizedAccessException exception)
             {
