@@ -1,0 +1,451 @@
+<UserControl x:Class="RightMenuCheck.App.Views.DiagnosticWorkbench"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignWidth="1440"
+             d:DesignHeight="820">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="56" />
+      <RowDefinition Height="46" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="30" />
+    </Grid.RowDefinitions>
+
+    <Border Grid.Row="0"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1">
+      <Grid Margin="16,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="220" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="12" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="12" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+          <TextBlock Text="RightMenuCheck"
+                     FontSize="17"
+                     FontWeight="SemiBold" />
+          <TextBlock Text="右键菜单诊断"
+                     FontSize="11"
+                     Foreground="{StaticResource TextSecondaryBrush}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+          <Button Style="{StaticResource PrimaryToolbarButtonStyle}"
+                  IsEnabled="{Binding CanStart}"
+                  Click="Scan_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe Fluent Icons"
+                         FontSize="14"
+                         Text="&#xE72C;"
+                         Margin="0,0,7,0" />
+              <TextBlock Text="重新扫描" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource ToolbarButtonStyle}"
+                  IsEnabled="{Binding CanStart}"
+                  Click="BenchmarkSelected_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe Fluent Icons"
+                         FontSize="14"
+                         Text="&#xE768;"
+                         Margin="0,0,7,0" />
+              <TextBlock Text="测试选中项" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource ToolbarButtonStyle}"
+                  IsEnabled="{Binding CanStart}"
+                  Click="BenchmarkAggregate_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock FontFamily="Segoe Fluent Icons"
+                         FontSize="14"
+                         Text="&#xE9D2;"
+                         Margin="0,0,7,0" />
+              <TextBlock Text="整体菜单" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource IconButtonStyle}"
+                  IsEnabled="{Binding CanCancel}"
+                  Click="Cancel_Click"
+                  ToolTip="取消当前操作">
+            <TextBlock FontFamily="Segoe Fluent Icons"
+                       FontSize="15"
+                       Text="&#xE711;" />
+          </Button>
+        </StackPanel>
+
+        <StackPanel Grid.Column="3"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+          <TextBlock Text="次数"
+                     Foreground="{StaticResource TextSecondaryBrush}"
+                     VerticalAlignment="Center"
+                     Margin="0,0,6,0" />
+          <ComboBox Width="64"
+                    ItemsSource="{Binding TrialCounts}"
+                    SelectedItem="{Binding TrialCount}" />
+        </StackPanel>
+
+        <Grid Grid.Column="5" VerticalAlignment="Center">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0"
+                     Text="测试样本"
+                     Foreground="{StaticResource TextSecondaryBrush}"
+                     VerticalAlignment="Center"
+                     Margin="0,0,7,0" />
+          <TextBox Grid.Column="1"
+                   MinWidth="180"
+                   MaxWidth="360"
+                   Text="{Binding SamplePath, UpdateSourceTrigger=PropertyChanged}" />
+          <Button Grid.Column="2"
+                  Style="{StaticResource IconButtonStyle}"
+                  Margin="6,0,4,0"
+                  Click="BrowseSample_Click"
+                  ToolTip="选择文件或文件夹样本">
+            <TextBlock FontFamily="Segoe Fluent Icons"
+                       FontSize="15"
+                       Text="&#xE8B7;" />
+          </Button>
+          <Button Grid.Column="3"
+                  Style="{StaticResource IconButtonStyle}"
+                  Margin="0"
+                  Click="ClearSample_Click"
+                  ToolTip="清除样本路径">
+            <TextBlock FontFamily="Segoe Fluent Icons"
+                       FontSize="14"
+                       Text="&#xE894;" />
+          </Button>
+        </Grid>
+
+        <Button Grid.Column="6"
+                Style="{StaticResource ToolbarButtonStyle}"
+                Margin="10,0,0,0"
+                IsEnabled="{Binding CanStart}"
+                Click="Export_Click">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock FontFamily="Segoe Fluent Icons"
+                       FontSize="14"
+                       Text="&#xEDE1;"
+                       Margin="0,0,7,0" />
+            <TextBlock Text="导出结果" />
+          </StackPanel>
+        </Button>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="1"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1">
+      <Grid Margin="16,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="260" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <ListBox Grid.Column="0"
+                 ItemsSource="{Binding Categories}"
+                 SelectedValuePath="Value"
+                 SelectedValue="{Binding SelectedCategory}"
+                 BorderThickness="0"
+                 Background="Transparent"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+          <ListBox.ItemContainerStyle>
+            <Style TargetType="ListBoxItem">
+              <Setter Property="Height" Value="45" />
+              <Setter Property="Padding" Value="14,0" />
+              <Setter Property="VerticalContentAlignment" Value="Center" />
+              <Setter Property="BorderThickness" Value="0,0,0,2" />
+              <Setter Property="BorderBrush" Value="Transparent" />
+              <Setter Property="Background" Value="Transparent" />
+              <Setter Property="Template">
+                <Setter.Value>
+                  <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="CategoryBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                      <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                      <Trigger Property="IsSelected" Value="True">
+                        <Setter TargetName="CategoryBorder"
+                                Property="Background"
+                                Value="{StaticResource AccentSoftBrush}" />
+                        <Setter TargetName="CategoryBorder"
+                                Property="BorderBrush"
+                                Value="{StaticResource AccentBrush}" />
+                        <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                      </Trigger>
+                      <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="CategoryBorder"
+                                Property="Background"
+                                Value="#F1F5F5" />
+                      </Trigger>
+                    </ControlTemplate.Triggers>
+                  </ControlTemplate>
+                </Setter.Value>
+              </Setter>
+            </Style>
+          </ListBox.ItemContainerStyle>
+        </ListBox>
+
+        <TextBox Grid.Column="2"
+                 Margin="12,7,8,7"
+                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                 ToolTip="按名称、发布者、应用、CLSID 或路径搜索" />
+        <CheckBox Grid.Column="3"
+                  Content="仅第三方"
+                  IsChecked="{Binding OnlyThirdParty}"
+                  VerticalAlignment="Center"
+                  Margin="6,0,14,0" />
+        <CheckBox Grid.Column="4"
+                          Content="仅启用"
+                          IsChecked="{Binding OnlyEnabled}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,14,0" />
+        <CheckBox Grid.Column="5"
+                  Content="包含静态命令"
+                  IsChecked="{Binding IncludeStaticCommands}"
+                  VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="360" />
+      </Grid.ColumnDefinitions>
+
+      <DataGrid x:Name="MenuGrid"
+                Grid.Column="0"
+                ItemsSource="{Binding ItemsView}"
+                SelectedItem="{Binding SelectedItem}"
+                AutoGenerateColumns="False"
+                IsReadOnly="True"
+                CanUserAddRows="False"
+                CanUserDeleteRows="False"
+                CanUserReorderColumns="True"
+                CanUserResizeColumns="True"
+                CanUserSortColumns="True"
+                SelectionMode="Extended"
+                SelectionUnit="FullRow"
+                EnableRowVirtualization="True"
+                EnableColumnVirtualization="True"
+                HeadersVisibility="Column"
+                RowHeight="34"
+                ColumnHeaderHeight="34"
+                GridLinesVisibility="Horizontal"
+                HorizontalGridLinesBrush="#E7EBED"
+                VerticalGridLinesBrush="Transparent"
+                BorderThickness="0"
+                Background="White"
+                AlternatingRowBackground="#FAFBFB"
+                RowBackground="White"
+                FrozenColumnCount="2">
+        <DataGrid.Resources>
+          <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"
+                           Color="#DCEFED" />
+          <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}"
+                           Color="#17212B" />
+        </DataGrid.Resources>
+        <DataGrid.Columns>
+          <DataGridTemplateColumn Header="状态" Width="92" SortMemberPath="State">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding State}"
+                           Foreground="{Binding State, Converter={StaticResource StatusBrushConverter}}"
+                           FontWeight="SemiBold"
+                           Style="{StaticResource CellTextStyle}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTextColumn Header="菜单项"
+                              Width="1.6*"
+                              MinWidth="170"
+                              Binding="{Binding DisplayName, Mode=OneWay}"
+                              ElementStyle="{StaticResource CellTextStyle}" />
+          <DataGridTextColumn Header="所属应用"
+                              Width="1.2*"
+                              MinWidth="130"
+                              Binding="{Binding OwnerName, Mode=OneWay}"
+                              ElementStyle="{StaticResource CellTextStyle}" />
+          <DataGridTextColumn Header="类型"
+                              Width="105"
+                              Binding="{Binding RegistrationType, Mode=OneWay}"
+                              ElementStyle="{StaticResource CellTextStyle}" />
+          <DataGridTextColumn Header="范围"
+                              Width="125"
+                              Binding="{Binding Scope, Mode=OneWay}"
+                              ElementStyle="{StaticResource CellTextStyle}" />
+          <DataGridTextColumn Header="架构"
+                              Width="82"
+                              Binding="{Binding Architecture, Mode=OneWay}"
+                              ElementStyle="{StaticResource CellTextStyle}" />
+          <DataGridTextColumn Header="中位数"
+                              Width="92"
+                              Binding="{Binding Median, Mode=OneWay}"
+                              SortMemberPath="Benchmark.HandlerDuration.Median"
+                              ElementStyle="{StaticResource CellTextStyle}" />
+          <DataGridTextColumn Header="P95"
+                              Width="92"
+                              Binding="{Binding Percentile95, Mode=OneWay}"
+                              SortMemberPath="Percentile95Value"
+                              ElementStyle="{StaticResource CellTextStyle}" />
+          <DataGridTextColumn Header="超时"
+                              Width="62"
+                              Binding="{Binding TimeoutCount, Mode=OneWay}"
+                              ElementStyle="{StaticResource CellTextStyle}" />
+          <DataGridTextColumn Header="错误"
+                              Width="62"
+                              Binding="{Binding FailureCount, Mode=OneWay}"
+                              ElementStyle="{StaticResource CellTextStyle}" />
+          <DataGridTemplateColumn Header="测试结果"
+                                  Width="96"
+                                  SortMemberPath="BenchmarkSortRank">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding ResultState}"
+                           Foreground="{Binding ResultState, Converter={StaticResource StatusBrushConverter}}"
+                           Style="{StaticResource CellTextStyle}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTextColumn Header="来源"
+                              Width="135"
+                              Binding="{Binding Source, Mode=OneWay}"
+                              ElementStyle="{StaticResource CellTextStyle}" />
+        </DataGrid.Columns>
+      </DataGrid>
+
+      <Border Grid.Column="1"
+              Background="{StaticResource SurfaceBrush}"
+              BorderBrush="{StaticResource BorderBrush}"
+              BorderThickness="1,0,0,0"
+              Padding="18,14">
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+          <StackPanel>
+            <TextBlock Text="详情" FontSize="15" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding SelectedItem.DisplayName}"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Margin="0,12,0,0"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="所属应用" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.OwnerName}" Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="发布者" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.Publisher}" Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="范围 / 类型" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.ScopeAndType, Mode=OneWay}"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="CLSID" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.HandlerClsid}"
+                       FontFamily="Cascadia Mono, Consolas"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="二进制" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.BinaryPath}"
+                       FontFamily="Cascadia Mono, Consolas"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="签名" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.Signature}"
+                       Foreground="{Binding SelectedItem.Signature, Converter={StaticResource StatusBrushConverter}}"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="注册位置" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.RegistrationPath}"
+                       FontFamily="Cascadia Mono, Consolas"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="命令" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.Command}"
+                       FontFamily="Cascadia Mono, Consolas"
+                       Style="{StaticResource DetailValueStyle}" />
+
+            <Border BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Margin="0,18,0,2" />
+            <TextBlock Text="基准结果"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       Margin="0,10,0,0" />
+            <TextBlock Text="中位数" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.Median}" Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="P95" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.Percentile95}" Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="测量范围" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.MeasurementScope}" Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="限制" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.Limitation}" Style="{StaticResource DetailValueStyle}" />
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="3"
+            Background="#EDF1F2"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,1,0,0">
+      <Grid Margin="14,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="16" />
+          <ColumnDefinition Width="180" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Grid.Column="0"
+                   Text="{Binding StatusText}"
+                   VerticalAlignment="Center"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   TextTrimming="CharacterEllipsis" />
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+          <TextBlock Text="可见 " Foreground="{StaticResource TextSecondaryBrush}" />
+          <TextBlock Text="{Binding VisibleCount}" FontWeight="SemiBold" />
+          <TextBlock Text=" · 问题 " Foreground="{StaticResource TextSecondaryBrush}" />
+          <TextBlock Text="{Binding IssueCount}" FontWeight="SemiBold" />
+          <TextBlock Text=" · 整体 " Foreground="{StaticResource TextSecondaryBrush}" />
+          <TextBlock Text="{Binding AggregateResult}" FontWeight="SemiBold" />
+        </StackPanel>
+        <ProgressBar Grid.Column="3"
+                     Height="4"
+                     VerticalAlignment="Center"
+                     Minimum="0"
+                     Maximum="{Binding ProgressMaximum, Mode=OneWay}"
+                     Value="{Binding ProgressValue, Mode=OneWay}"
+                     Foreground="{StaticResource AccentBrush}"
+                     Background="#D7DEE1" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

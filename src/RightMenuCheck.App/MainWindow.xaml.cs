@@ -1,23 +1,28 @@
-﻿using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
+﻿using System.Windows;
+using RightMenuCheck.App.Services;
+using RightMenuCheck.App.ViewModels;
 
 namespace RightMenuCheck.App;
 
-/// <summary>
-/// Interaction logic for MainWindow.xaml
-/// </summary>
 public partial class MainWindow : Window
 {
+    private MainWindowViewModel ViewModel =>
+        DataContext as MainWindowViewModel ??
+        throw new InvalidOperationException("MainWindowViewModel is not configured.");
+
     public MainWindow()
     {
         InitializeComponent();
+        DataContext = new MainWindowViewModel(new ContextMenuDataService());
+        Loaded += MainWindow_Loaded;
+        Closed += MainWindow_Closed;
     }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= MainWindow_Loaded;
+        await ViewModel.ScanAsync();
+    }
+
+    private void MainWindow_Closed(object? sender, EventArgs e) => ViewModel.Dispose();
 }
