@@ -16,3 +16,14 @@
 - AppX/MSIX 菜单只保存包身份和清单证据；不得通过写 AppRepository 还原。
 
 破坏性操作必须要求 `IsComplete=true`。安全描述符、键或值读取失败会使备份不完整，并阻止后续禁用、删除或覆盖恢复。
+
+## 恢复与操作日志
+
+恢复预检比较当前键值和 SDDL，并区分缺失键、缺失值、变化值、额外当前值及权限差异。存在冲突时必须由调用方明确确认。
+
+- `Merge`：写回备份中的键值，但保留当前额外值和子键。
+- `Exact`：删除选定注册根后按备份重建；这是回到备份状态的推荐模式。
+
+每次注册表写入在 `%LocalAppData%\RightMenuCheck\Journals` 对应目录保存版本化 JSON 日志。状态依次为 `Prepared`、`Applying`、`Completed`；失败时为 `RolledBack` 或 `RollbackFailed`。执行器在首个写入前捕获受影响根的完整状态，任一步失败后按该状态精确重建。
+
+经典处理器禁用使用当前用户 `Shell Extensions\Blocked`，会影响同 CLSID 的所有菜单范围。静态、级联和 DelegateExecute命令使用注册键 `LegacyDisable`。AppX/MSIX 单命令没有受支持的注册表禁用操作。

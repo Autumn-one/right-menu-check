@@ -53,6 +53,48 @@ internal sealed class InMemoryRegistryReader : IRegistryReader
         node.Values[valueName ?? string.Empty] = new RegistryValueData(value, kind);
     }
 
+    public void DeleteValue(
+        RegistryHiveKind hive,
+        RegistryViewKind view,
+        string keyPath,
+        string? valueName)
+    {
+        if (TryGetNode(hive, view, keyPath, out var node))
+        {
+            _ = node.Values.Remove(valueName ?? string.Empty);
+        }
+    }
+
+    public void DeleteKeyTree(
+        RegistryHiveKind hive,
+        RegistryViewKind view,
+        string keyPath)
+    {
+        var normalized = NormalizePath(keyPath);
+        var dictionaryPrefix = $"{hive}|{view}|";
+        var fullKey = $"{dictionaryPrefix}{normalized}";
+        var childPrefix = $"{fullKey}\\";
+        var keysToRemove = _nodes.Keys.Where(key =>
+                key.Equals(fullKey, StringComparison.OrdinalIgnoreCase) ||
+                key.StartsWith(childPrefix, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        foreach (var key in keysToRemove)
+        {
+            _ = _nodes.Remove(key);
+        }
+
+        var separator = normalized.LastIndexOf('\\');
+        if (separator > 0)
+        {
+            var parentPath = normalized[..separator];
+            var childName = normalized[(separator + 1)..];
+            if (TryGetNode(hive, view, parentPath, out var parent))
+            {
+                _ = parent.SubKeys.Remove(childName);
+            }
+        }
+    }
+
     public IReadOnlyList<string> GetSubKeyNames(
         RegistryHiveKind hive,
         RegistryViewKind view,
