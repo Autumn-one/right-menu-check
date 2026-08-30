@@ -42,6 +42,7 @@
                     Orientation="Horizontal"
                     VerticalAlignment="Center">
           <Button Style="{StaticResource PrimaryToolbarButtonStyle}"
+                  AutomationProperties.Name="重新扫描"
                   IsEnabled="{Binding CanStart}"
                   Click="Scan_Click">
             <StackPanel Orientation="Horizontal">
@@ -53,6 +54,7 @@
             </StackPanel>
           </Button>
           <Button Style="{StaticResource ToolbarButtonStyle}"
+                  AutomationProperties.Name="测试选中项"
                   IsEnabled="{Binding CanStart}"
                   Click="BenchmarkSelected_Click">
             <StackPanel Orientation="Horizontal">
@@ -64,6 +66,7 @@
             </StackPanel>
           </Button>
           <Button Style="{StaticResource ToolbarButtonStyle}"
+                  AutomationProperties.Name="整体菜单"
                   IsEnabled="{Binding CanStart}"
                   Click="BenchmarkAggregate_Click">
             <StackPanel Orientation="Horizontal">
@@ -75,6 +78,7 @@
             </StackPanel>
           </Button>
           <Button Style="{StaticResource IconButtonStyle}"
+                  AutomationProperties.Name="取消当前操作"
                   IsEnabled="{Binding CanCancel}"
                   Click="Cancel_Click"
                   ToolTip="取消当前操作">
@@ -114,6 +118,7 @@
                    Text="{Binding SamplePath, UpdateSourceTrigger=PropertyChanged}" />
           <Button Grid.Column="2"
                   Style="{StaticResource IconButtonStyle}"
+                  AutomationProperties.Name="选择测试样本"
                   Margin="6,0,4,0"
                   Click="BrowseSample_Click"
                   ToolTip="选择文件或文件夹样本">
@@ -123,6 +128,7 @@
           </Button>
           <Button Grid.Column="3"
                   Style="{StaticResource IconButtonStyle}"
+                  AutomationProperties.Name="清除测试样本"
                   Margin="0"
                   Click="ClearSample_Click"
                   ToolTip="清除样本路径">
@@ -137,6 +143,7 @@
                     Margin="10,0,0,0"
                     VerticalAlignment="Center">
           <Button Style="{StaticResource ToolbarButtonStyle}"
+                  AutomationProperties.Name="恢复备份"
                   IsEnabled="{Binding CanStart}"
                   Click="Restore_Click">
             <StackPanel Orientation="Horizontal">
@@ -148,6 +155,7 @@
             </StackPanel>
           </Button>
           <Button Style="{StaticResource ToolbarButtonStyle}"
+                  AutomationProperties.Name="导出结果"
                   Margin="0"
                   IsEnabled="{Binding CanStart}"
                   Click="Export_Click">
@@ -380,6 +388,7 @@
                        TextWrapping="Wrap" />
             <WrapPanel Margin="0,12,0,2">
               <Button Style="{StaticResource ToolbarButtonStyle}"
+                      AutomationProperties.Name="备份选中项"
                       IsEnabled="{Binding HasSelectedItem}"
                       Click="BackupSelected_Click">
                 <StackPanel Orientation="Horizontal">
@@ -390,6 +399,7 @@
                 </StackPanel>
               </Button>
               <Button Style="{StaticResource ToolbarButtonStyle}"
+                      AutomationProperties.Name="{Binding StateActionLabel}"
                       IsEnabled="{Binding HasSelectedItem}"
                       Click="ToggleState_Click">
                 <StackPanel Orientation="Horizontal">
@@ -400,6 +410,7 @@
                 </StackPanel>
               </Button>
               <Button Style="{StaticResource ToolbarButtonStyle}"
+                      AutomationProperties.Name="删除菜单注册"
                       IsEnabled="{Binding HasSelectedItem}"
                       Click="RemoveRegistration_Click">
                 <StackPanel Orientation="Horizontal">
@@ -410,6 +421,7 @@
                 </StackPanel>
               </Button>
               <Button Style="{StaticResource ToolbarButtonStyle}"
+                      AutomationProperties.Name="卸载所属应用"
                       IsEnabled="{Binding HasSelectedItem}"
                       Click="UninstallApplication_Click">
                 <StackPanel Orientation="Horizontal">
