@@ -52,6 +52,7 @@ public sealed class ComServerResolver
                 reference.Role,
                 reference.Clsid,
                 comServer,
+                Binary: null,
                 issues));
 
             void AddPathIssue(Exception exception)
