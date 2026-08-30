@@ -40,6 +40,10 @@ public sealed class ApplicationAnnouncementService : IApplicationAnnouncementSer
             cancellationToken);
         if (feed is null)
         {
+            _logger.Log(
+                AppLogLevel.Information,
+                "announcement.feed_unavailable",
+                "No verified announcement feed was available.");
             return;
         }
 
@@ -50,9 +54,28 @@ public sealed class ApplicationAnnouncementService : IApplicationAnnouncementSer
             ApplicationVersionProvider.GetCurrent(),
             DateTimeOffset.UtcNow,
             shown);
+        _logger.Log(
+            AppLogLevel.Information,
+            "announcement.selection_completed",
+            "Signed announcement selection completed.",
+            new Dictionary<string, object?>
+            {
+                ["feedSequence"] = feed.Payload.Sequence,
+                ["knownRevisionCount"] = shown.Count,
+                ["pendingCount"] = pending.Count,
+            });
         foreach (var message in pending)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _logger.Log(
+                AppLogLevel.Information,
+                "announcement.window_opening",
+                "A signed announcement window is opening.",
+                new Dictionary<string, object?>
+                {
+                    ["messageId"] = message.Id,
+                    ["revision"] = message.Revision,
+                });
             var window = new AnnouncementWindow(message)
             {
                 Owner = owner,
@@ -67,6 +90,18 @@ public sealed class ApplicationAnnouncementService : IApplicationAnnouncementSer
                     AppLogLevel.Information,
                     "announcement.shown",
                     "Signed announcement was acknowledged.",
+                    new Dictionary<string, object?>
+                    {
+                        ["messageId"] = message.Id,
+                        ["revision"] = message.Revision,
+                    });
+            }
+            else
+            {
+                _logger.Log(
+                    AppLogLevel.Information,
+                    "announcement.dismissed_without_acknowledgement",
+                    "A signed announcement window closed without acknowledgement.",
                     new Dictionary<string, object?>
                     {
                         ["messageId"] = message.Id,
