@@ -1,21 +1,31 @@
-﻿using System.IO;
+using System.IO;
+using System.IO.Pipes;
+using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using RightMenuCheck.App.Services;
 using RightMenuCheck.App.ViewModels;
+using RightMenuCheck.Distribution;
 using RightMenuCheck.Windows.Diagnostics;
+using RightMenuCheck.Windows.Security;
 
 namespace RightMenuCheck.App;
 
-public partial class App : Application
+public partial class App : Application, IDisposable
 {
+    private AnnouncementStateStore? _announcementStateStore;
+    private HttpClient? _httpClient;
+    private CancellationTokenSource? _lifetime;
     private IAppLogger? _logger;
+    private AppTelemetryClient? _telemetryClient;
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        _lifetime = new CancellationTokenSource();
         _logger = StructuredFileLogger.CreateDefault("app");
         var assembly = Assembly.GetExecutingAssembly();
         _logger.Log(
@@ -33,15 +43,54 @@ public partial class App : Application
                 ["executablePath"] = Environment.ProcessPath,
             });
         DispatcherUnhandledException += App_DispatcherUnhandledException;
-        var viewModel = new MainWindowViewModel(
-            new ContextMenuDataService(_logger),
-            new ContextMenuManagementService(_logger));
-        MainWindow = new MainWindow(viewModel);
-        MainWindow.Show();
+        try
+        {
+            await StartApplicationAsync(e.Args, _lifetime.Token);
+        }
+        catch (Exception exception) when (exception is
+                                           ArgumentException or
+                                           InvalidDataException or
+                                           IOException or
+                                           UnauthorizedAccessException or
+                                           InvalidOperationException or
+                                           HttpRequestException)
+        {
+            _logger.Log(
+                AppLogLevel.Error,
+                "app.startup_failed",
+                "Application startup failed.",
+                exception: exception);
+            MessageBox.Show(
+                $"RightMenuCheck 无法启动：{exception.Message}",
+                "启动失败",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(exitCode: 1);
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _lifetime?.Cancel();
+        if (_telemetryClient is not null)
+        {
+            try
+            {
+                _telemetryClient.StopAsync(CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch (Exception exception) when (exception is HttpRequestException or IOException)
+            {
+                _logger?.Log(
+                    AppLogLevel.Warning,
+                    "telemetry.stop_failed",
+                    "Telemetry session did not report normal shutdown.",
+                    exception: exception);
+            }
+
+            _telemetryClient.Dispose();
+            _telemetryClient = null;
+        }
+
         if (_logger is not null)
         {
             _logger.Log(
@@ -60,7 +109,197 @@ public partial class App : Application
             _logger.Dispose();
         }
 
+        Dispose();
+
         base.OnExit(e);
+    }
+
+    public void Dispose()
+    {
+        _telemetryClient?.Dispose();
+        _telemetryClient = null;
+        _announcementStateStore?.Dispose();
+        _announcementStateStore = null;
+        _httpClient?.Dispose();
+        _httpClient = null;
+        _lifetime?.Dispose();
+        _lifetime = null;
+        GC.SuppressFinalize(this);
+    }
+
+    private async Task StartApplicationAsync(
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        ProcessElevationPolicy.ThrowIfElevated("RightMenuCheck startup");
+        var startupArguments = ApplicationStartupArguments.Parse(arguments);
+        var configuration = EmbeddedDistributionConfigurationLoader.Load();
+        _httpClient = new HttpClient
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
+            $"RightMenuCheck/{ApplicationVersionProvider.GetCurrent()}");
+        var documentClient = new DistributionDocumentClient(_httpClient, _logger!);
+        var updateService = new ApplicationUpdateService(
+            configuration,
+            documentClient,
+            new SystemApplicationInstallContext(),
+            new SystemUpdaterLauncher(),
+            _logger!);
+        while (true)
+        {
+            var updateCheck = await updateService.CheckAsync(cancellationToken);
+            if (updateCheck.State == ApplicationUpdateState.Current)
+            {
+                break;
+            }
+
+            if (updateCheck is
+                {
+                    State: ApplicationUpdateState.Required,
+                    Manifest: { } manifest,
+                })
+            {
+                var updateWindow = new UpdateRequiredWindow(updateService, manifest);
+                MainWindow = updateWindow;
+                if (updateWindow.ShowDialog() == true)
+                {
+                    Shutdown();
+                }
+
+                return;
+            }
+
+            var statusWindow = new VersionStatusWindow(updateCheck.Message);
+            MainWindow = statusWindow;
+            _ = statusWindow.ShowDialog();
+        }
+
+        var viewModel = new MainWindowViewModel(
+            new ContextMenuDataService(_logger!),
+            new ContextMenuManagementService(_logger!));
+        var mainWindow = new MainWindow(viewModel);
+        if (startupArguments is
+            {
+                UpdateHealthPipeName: { } healthPipeName,
+                UpdateHealthToken: { } healthToken,
+            })
+        {
+            mainWindow.InitialScanCompleted += async (_, _) =>
+            {
+                try
+                {
+                    await ReportUpdateHealthAsync(
+                        healthPipeName,
+                        healthToken,
+                        CancellationToken.None);
+                }
+                catch (Exception exception) when (exception is
+                                                   IOException or
+                                                   TimeoutException or
+                                                   InvalidOperationException)
+                {
+                    _logger!.Log(
+                        AppLogLevel.Error,
+                        "update.health_report_failed",
+                        "Updated application could not report healthy startup.",
+                        exception: exception);
+                }
+            };
+        }
+
+        MainWindow = mainWindow;
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
+        mainWindow.Show();
+        if (startupArguments.UpdateRolledBack)
+        {
+            _logger!.Log(
+                AppLogLevel.Warning,
+                "update.rollback_started",
+                "Application restarted after an update rollback.");
+        }
+
+        StartTelemetry(ResolveTelemetryBaseUrl(configuration.Settings.TelemetryBaseUrl));
+        _announcementStateStore = new AnnouncementStateStore(_logger!);
+        var announcementService = new ApplicationAnnouncementService(
+            configuration,
+            documentClient,
+            _announcementStateStore,
+            _logger!);
+        await announcementService.ShowPendingAsync(mainWindow, cancellationToken);
+    }
+
+    private void StartTelemetry(string? telemetryBaseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(telemetryBaseUrl))
+        {
+            return;
+        }
+
+        var options = new TelemetryClientOptions(new Uri(telemetryBaseUrl, UriKind.Absolute));
+        _telemetryClient = new AppTelemetryClient(
+            options,
+            new MachineIdentityProvider(_logger!),
+            _logger!);
+        _ = _telemetryClient.StartAsync(CancellationToken.None);
+    }
+
+    private string? ResolveTelemetryBaseUrl(string? configuredUrl)
+    {
+        var overrideUrl = Environment.GetEnvironmentVariable("RIGHTMENUCHECK_TELEMETRY_URL");
+        if (string.IsNullOrWhiteSpace(overrideUrl))
+        {
+            return configuredUrl;
+        }
+
+        if (Uri.TryCreate(overrideUrl, UriKind.Absolute, out var uri) && uri.IsLoopback)
+        {
+            _logger!.Log(
+                AppLogLevel.Information,
+                "telemetry.loopback_override_enabled",
+                "Loopback telemetry endpoint is enabled for local integration testing.");
+            return overrideUrl;
+        }
+
+        _logger!.Log(
+            AppLogLevel.Warning,
+            "telemetry.override_rejected",
+            "Non-loopback telemetry environment override was rejected.");
+        return configuredUrl;
+    }
+
+    private static async Task ReportUpdateHealthAsync(
+        string pipeName,
+        string healthToken,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(TimeSpan.FromSeconds(10));
+        await using var pipe = new NamedPipeClientStream(
+            ".",
+            pipeName,
+            PipeDirection.Out,
+            PipeOptions.Asynchronous);
+        try
+        {
+            await pipe.ConnectAsync(timeoutSource.Token);
+            var report = new UpdateHealthReport(
+                healthToken,
+                Environment.ProcessId,
+                ApplicationVersionProvider.GetCurrent().ToString());
+            await using var writer = new StreamWriter(pipe)
+            {
+                AutoFlush = true,
+            };
+            await writer.WriteLineAsync(
+                DistributionJson.Serialize(report).AsMemory(),
+                timeoutSource.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("Update health pipe connection timed out.");
+        }
     }
 
     private void App_DispatcherUnhandledException(

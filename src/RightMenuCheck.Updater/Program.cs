@@ -1,7 +1,8 @@
-using RightMenuCheck.Distribution;
-using RightMenuCheck.Windows.Diagnostics;
 using System.ComponentModel;
 using System.Text.Json;
+using RightMenuCheck.Distribution;
+using RightMenuCheck.Windows.Diagnostics;
+using RightMenuCheck.Windows.Security;
 
 namespace RightMenuCheck.Updater;
 
@@ -12,13 +13,16 @@ internal static class Program
         using var logger = StructuredFileLogger.CreateDefault("updater");
         try
         {
+            ProcessElevationPolicy.ThrowIfElevated("Updater execution");
             var requestPath = ParseRequestPath(args);
             var request = DistributionJson.Deserialize<UpdateInstallRequest>(
                 await File.ReadAllTextAsync(requestPath).ConfigureAwait(false));
             var installer = new UpdateInstaller(
                 new SafeZipExtractor(),
                 new SystemUpdateProcessController(),
-                new FileUpdateHealthMonitor(),
+                new NamedPipeUpdateHealthMonitor(),
+                new SystemUpdateTargetPolicy(),
+                new NamedPipeUpdateReadySignal(),
                 EmbeddedDistributionPublicKey.Load(),
                 logger);
             var result = await installer

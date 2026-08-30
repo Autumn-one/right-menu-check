@@ -10,12 +10,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\distribution\update-public-key.pem"
+                      Link="Assets\update-public-key.pem" />
+    <EmbeddedResource Include="Assets\distribution-settings.json" />
     <Resource Include="Assets\RightMenuCheck.ico" />
     <Resource Include="Assets\RightMenuCheck.png" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\RightMenuCheck.Core\RightMenuCheck.Core.csproj" />
+    <ProjectReference Include="..\RightMenuCheck.Distribution\RightMenuCheck.Distribution.csproj" />
     <ProjectReference Include="..\RightMenuCheck.Probe.Protocol\RightMenuCheck.Probe.Protocol.csproj" />
     <ProjectReference Include="..\RightMenuCheck.Windows\RightMenuCheck.Windows.csproj" />
   </ItemGroup>

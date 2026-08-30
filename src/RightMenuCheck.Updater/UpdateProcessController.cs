@@ -5,13 +5,16 @@ namespace RightMenuCheck.Updater;
 
 public sealed record UpdateProcessHandle(int ProcessId, string ExecutablePath);
 
+public interface IVerifiedUpdateParent : IDisposable
+{
+    Task WaitForExitAsync(TimeSpan timeout, CancellationToken cancellationToken);
+}
+
 public interface IUpdateProcessController
 {
-    Task WaitForExitAsync(
+    IVerifiedUpdateParent OpenVerifiedParent(
         int processId,
-        string expectedExecutablePath,
-        TimeSpan timeout,
-        CancellationToken cancellationToken);
+        string expectedExecutablePath);
 
     UpdateProcessHandle Start(
         string executablePath,
@@ -25,11 +28,9 @@ public interface IUpdateProcessController
 
 public sealed class SystemUpdateProcessController : IUpdateProcessController
 {
-    public async Task WaitForExitAsync(
+    public IVerifiedUpdateParent OpenVerifiedParent(
         int processId,
-        string expectedExecutablePath,
-        TimeSpan timeout,
-        CancellationToken cancellationToken)
+        string expectedExecutablePath)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(processId);
 
@@ -40,10 +41,10 @@ public sealed class SystemUpdateProcessController : IUpdateProcessController
         }
         catch (ArgumentException)
         {
-            return;
+            throw new InvalidOperationException("Update parent process is no longer running.");
         }
 
-        using (process)
+        try
         {
             var actualPath = GetProcessPath(process);
             if (!actualPath.Equals(
@@ -53,16 +54,12 @@ public sealed class SystemUpdateProcessController : IUpdateProcessController
                 throw new InvalidOperationException("Update parent process identity does not match.");
             }
 
-            using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutSource.CancelAfter(timeout);
-            try
-            {
-                await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                throw new TimeoutException("The application did not exit before the update timeout.");
-            }
+            return new VerifiedUpdateParent(process);
+        }
+        catch
+        {
+            process.Dispose();
+            throw;
         }
     }
 
@@ -148,5 +145,28 @@ public sealed class SystemUpdateProcessController : IUpdateProcessController
         {
             throw new InvalidOperationException("Unable to verify update process identity.", exception);
         }
+    }
+
+    private sealed class VerifiedUpdateParent(Process process) : IVerifiedUpdateParent
+    {
+        public async Task WaitForExitAsync(
+            TimeSpan timeout,
+            CancellationToken cancellationToken)
+        {
+            using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken);
+            timeoutSource.CancelAfter(timeout);
+            try
+            {
+                await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException(
+                    "The application did not exit before the update timeout.");
+            }
+        }
+
+        public void Dispose() => process.Dispose();
     }
 }

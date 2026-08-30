@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "repository": "Autumn-one/right-menu-check",
+  "branch": "main",
+  "updateManifestPath": "distribution/update.json",
+  "announcementPath": "distribution/messages.json",
+  "mirrorPrefixes": [
+    "https://ghfast.top/",
+    "https://gh-proxy.com/"
+  ],
+  "telemetryBaseUrl": null
+}

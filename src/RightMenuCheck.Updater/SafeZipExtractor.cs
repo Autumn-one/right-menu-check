@@ -8,6 +8,11 @@ public interface ISafeZipExtractor
         string packagePath,
         string destinationDirectory,
         CancellationToken cancellationToken);
+
+    Task ExtractAsync(
+        Stream packageStream,
+        string destinationDirectory,
+        CancellationToken cancellationToken);
 }
 
 public sealed class SafeZipExtractor : ISafeZipExtractor
@@ -32,19 +37,42 @@ public sealed class SafeZipExtractor : ISafeZipExtractor
             throw new InvalidDataException("Update package or staging directory state is invalid.");
         }
 
+        await using var packageStream = new FileStream(
+            package,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 81920,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await ExtractAsync(packageStream, destination, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ExtractAsync(
+        Stream packageStream,
+        string destinationDirectory,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(packageStream);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
+        if (!packageStream.CanRead || !packageStream.CanSeek)
+        {
+            throw new InvalidDataException("Update package stream must be readable and seekable.");
+        }
+
+        var destination = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(destinationDirectory));
+        if (Directory.Exists(destination))
+        {
+            throw new InvalidDataException("Update staging directory already exists.");
+        }
+
+        packageStream.Position = 0;
         Directory.CreateDirectory(destination);
         var destinationPrefix = $"{destination}{Path.DirectorySeparatorChar}";
         long totalBytes = 0;
         try
         {
-            await using var packageStream = new FileStream(
-                package,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 81920,
-                FileOptions.Asynchronous | FileOptions.SequentialScan);
-            using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: false);
+            using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
             foreach (var entry in archive.Entries)
             {
                 cancellationToken.ThrowIfCancellationRequested();
