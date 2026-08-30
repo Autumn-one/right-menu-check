@@ -101,6 +101,48 @@ public sealed class SystemRegistryManagementTests
         AssertCompletedJournal(result.JournalPath);
     }
 
+    [Fact]
+    public async Task RemoveDeletesOnlySyntheticRegistrationAndExactRestoreRecreatesIt()
+    {
+        using var fixture = new ManagementFixture();
+        var metadata = fixture.CreateMetadata();
+        var backupPath = fixture.CreateBackupPath("remove");
+        var removal = fixture.CreateRemovalService();
+
+        var prepared = await removal.PrepareAsync(
+            metadata,
+            backupPath,
+            allowSystemProtected: false,
+            overwriteBackup: false,
+            CancellationToken.None);
+        var removalResult = await removal.ExecuteLocalAsync(prepared, CancellationToken.None);
+
+        Assert.True(removalResult.MutationResult?.Succeeded);
+        Assert.False(fixture.Registry.KeyExists(
+            fixture.RegistrationSource.Hive,
+            fixture.RegistrationSource.View,
+            fixture.RegistrationSource.KeyPath));
+        var restore = fixture.CreateRestoreService();
+        var plan = await restore.CreatePlanAsync(
+            backupPath,
+            RegistryRestoreMode.Exact,
+            CancellationToken.None);
+        var restoreResult = await restore.ExecuteAsync(
+            plan,
+            acceptConflicts: true,
+            CancellationToken.None);
+
+        Assert.True(restoreResult.Succeeded);
+        Assert.Equal("Synthetic", fixture.ReadValue("MUIVerb")?.Value);
+        Assert.Equal(
+            "synthetic.exe \"%1\"",
+            fixture.Registry.GetValue(
+                fixture.RegistrationSource.Hive,
+                fixture.RegistrationSource.View,
+                $"{fixture.RegistrationSource.KeyPath}\\command",
+                valueName: null)?.Value);
+    }
+
     private static void AssertCompletedJournal(string path)
     {
         using var document = JsonDocument.Parse(File.ReadAllBytes(path));
@@ -200,6 +242,11 @@ public sealed class SystemRegistryManagementTests
 
         public ContextMenuStateActionService CreateStateService() => new(
             new ContextMenuStateActionPlanner(Registry),
+            BackupService,
+            TransactionExecutor);
+
+        public ContextMenuRemovalService CreateRemovalService() => new(
+            Registry,
             BackupService,
             TransactionExecutor);
 

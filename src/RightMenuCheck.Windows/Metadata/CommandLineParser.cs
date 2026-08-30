@@ -5,13 +5,9 @@ namespace RightMenuCheck.Windows.Metadata;
 
 internal static partial class CommandLineParser
 {
-    public static string? TryGetExecutable(string? commandLine)
+    public static IReadOnlyList<string> Parse(string commandLine)
     {
-        if (string.IsNullOrWhiteSpace(commandLine))
-        {
-            return null;
-        }
-
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
         var expanded = Environment.ExpandEnvironmentVariables(commandLine.Trim());
         var argumentsPointer = CommandLineToArgvW(expanded, out var argumentCount);
         if (argumentsPointer == IntPtr.Zero)
@@ -21,18 +17,30 @@ internal static partial class CommandLineParser
 
         try
         {
-            if (argumentCount == 0)
+            var result = new string[argumentCount];
+            for (var index = 0; index < argumentCount; index++)
             {
-                return null;
+                var argumentPointer = Marshal.ReadIntPtr(argumentsPointer, index * IntPtr.Size);
+                result[index] = Marshal.PtrToStringUni(argumentPointer) ?? string.Empty;
             }
 
-            var firstArgumentPointer = Marshal.ReadIntPtr(argumentsPointer);
-            return Marshal.PtrToStringUni(firstArgumentPointer);
+            return result;
         }
         finally
         {
             _ = LocalFree(argumentsPointer);
         }
+    }
+
+    public static string? TryGetExecutable(string? commandLine)
+    {
+        if (string.IsNullOrWhiteSpace(commandLine))
+        {
+            return null;
+        }
+
+        var arguments = Parse(commandLine);
+        return arguments.Count == 0 ? null : arguments[0];
     }
 
     [LibraryImport("shell32.dll", EntryPoint = "CommandLineToArgvW", SetLastError = true,
