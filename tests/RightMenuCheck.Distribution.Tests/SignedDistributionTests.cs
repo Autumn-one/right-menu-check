@@ -17,7 +17,8 @@ public sealed class SignedDistributionTests
         var decision = UpdatePolicyEvaluator.Evaluate(
             SemanticVersion.Parse("1.1.9"),
             restored,
-            keys.PublicKey);
+            keys.PublicKey,
+            restored.Payload.IssuedAtUtc.AddHours(1));
 
         Assert.True(restored.HasValidSignature(keys.PublicKey));
         Assert.Equal(UpdateDecisionKind.Required, decision.Kind);
@@ -33,9 +34,40 @@ public sealed class SignedDistributionTests
         var decision = UpdatePolicyEvaluator.Evaluate(
             SemanticVersion.Parse("1.2.0"),
             manifest,
-            keys.PublicKey);
+            keys.PublicKey,
+            manifest.Payload.IssuedAtUtc.AddHours(1));
 
         Assert.Equal(UpdateDecisionKind.Current, decision.Kind);
+    }
+
+    [Fact]
+    public void ExpiredCurrentManifestRequiresVersionStateRetry()
+    {
+        var keys = CreateKeys();
+        var manifest = SignedUpdateManifest.Create(CreateUpdatePayload("1.2.0"), keys.PrivateKey);
+
+        var decision = UpdatePolicyEvaluator.Evaluate(
+            SemanticVersion.Parse("1.2.0"),
+            manifest,
+            keys.PublicKey,
+            manifest.Payload.ExpiresAtUtc.AddMinutes(1));
+
+        Assert.Equal(UpdateDecisionKind.StaleManifest, decision.Kind);
+    }
+
+    [Fact]
+    public void ExpiredNewerManifestRequiresVersionStateRetry()
+    {
+        var keys = CreateKeys();
+        var manifest = SignedUpdateManifest.Create(CreateUpdatePayload("1.2.0"), keys.PrivateKey);
+
+        var decision = UpdatePolicyEvaluator.Evaluate(
+            SemanticVersion.Parse("1.1.0"),
+            manifest,
+            keys.PublicKey,
+            manifest.Payload.ExpiresAtUtc.AddMinutes(1));
+
+        Assert.Equal(UpdateDecisionKind.StaleManifest, decision.Kind);
     }
 
     [Fact]
@@ -51,7 +83,8 @@ public sealed class SignedDistributionTests
         var decision = UpdatePolicyEvaluator.Evaluate(
             SemanticVersion.Parse("1.0.0"),
             tampered,
-            keys.PublicKey);
+            keys.PublicKey,
+            manifest.Payload.IssuedAtUtc.AddHours(1));
 
         Assert.False(tampered.HasValidSignature(keys.PublicKey));
         Assert.Equal(UpdateDecisionKind.InvalidManifest, decision.Kind);
@@ -64,7 +97,9 @@ public sealed class SignedDistributionTests
         var now = DateTimeOffset.Parse("2026-08-31T00:00:00Z", CultureInfo.InvariantCulture);
         var feed = SignedAnnouncementFeed.Create(
             new AnnouncementFeedPayload(
-                now,
+                Sequence: 1,
+                IssuedAtUtc: now.AddHours(-2),
+                ExpiresAtUtc: now.AddDays(1),
                 [
                     new AnnouncementMessage(
                         "active",
@@ -113,7 +148,9 @@ public sealed class SignedDistributionTests
         var now = DateTimeOffset.UtcNow;
         var feed = SignedAnnouncementFeed.Create(
             new AnnouncementFeedPayload(
-                now,
+                Sequence: 1,
+                IssuedAtUtc: now.AddHours(-1),
+                ExpiresAtUtc: now.AddDays(1),
                 [
                     new AnnouncementMessage(
                         "notice",
@@ -146,8 +183,14 @@ public sealed class SignedDistributionTests
     }
 
     private static UpdateManifestPayload CreateUpdatePayload(string version) => new(
+        Sequence: 1,
+        IssuedAtUtc: DateTimeOffset.Parse(
+            "2026-08-31T00:00:00Z",
+            CultureInfo.InvariantCulture),
+        ExpiresAtUtc: DateTimeOffset.Parse(
+            "2026-09-30T00:00:00Z",
+            CultureInfo.InvariantCulture),
         version,
-        DateTimeOffset.Parse("2026-08-31T00:00:00Z", CultureInfo.InvariantCulture),
         new UpdatePackage(
             "RightMenuCheck-1.2.0-win-x64.zip",
             SizeBytes: 1024,

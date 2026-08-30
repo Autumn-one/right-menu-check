@@ -1,7 +1,38 @@
 [CmdletBinding()]
-param()
+param(
+    [Parameter(Mandatory, Position = 0)]
+    [ValidateNotNullOrEmpty()]
+    [string]$Version
+)
 
 $ErrorActionPreference = 'Stop'
+$semanticVersionPattern = `
+    '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)' + `
+    '(?:-((?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)' + `
+    '(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?' + `
+    '(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$'
+$semanticVersion = [Text.RegularExpressions.Regex]::Match(
+    $Version,
+    $semanticVersionPattern,
+    [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+if (-not $semanticVersion.Success) {
+    throw "Version must be a canonical Semantic Version 2.0 value: $Version"
+}
+
+$coreComponents = for ($index = 1; $index -le 3; $index++) {
+    $component = 0
+    if (-not [int]::TryParse(
+            $semanticVersion.Groups[$index].Value,
+            [Globalization.NumberStyles]::None,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [ref]$component)) {
+        throw "Version core component exceeds the supported Int32 range: $Version"
+    }
+
+    $component
+}
+$versionPrefix = [string]::Join('.', $coreComponents)
+
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $publishRoot = [IO.Path]::GetFullPath(
     (Join-Path $repoRoot 'artifacts\publish\RightMenuCheck'))
@@ -26,7 +57,11 @@ $commonPublishArguments = @(
     '--configuration', 'Release',
     '--self-contained', 'true',
     '-p:ContinuousIntegrationBuild=true',
-    "-p:SourceRevisionId=$commit"
+    "-p:SourceRevisionId=$commit",
+    "-p:Version=$Version",
+    "-p:VersionPrefix=$versionPrefix",
+    "-p:InformationalVersion=$Version",
+    '-p:IncludeSourceRevisionInInformationalVersion=false'
 )
 
 & dotnet publish `
@@ -76,7 +111,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Updater publish failed.' }
 
 $buildInfo = [ordered]@{
     product = 'RightMenuCheck'
-    version = '0.1.0'
+    version = $Version
     commit = $commit
     builtAtUtc = [DateTimeOffset]::UtcNow.ToString('O', [Globalization.CultureInfo]::InvariantCulture)
     applicationRuntime = 'win-x64'

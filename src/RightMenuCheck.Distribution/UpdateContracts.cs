@@ -10,11 +10,13 @@ public sealed record UpdatePackage(
     [property: JsonPropertyOrder(4)] IReadOnlyList<string> MirrorUrls);
 
 public sealed record UpdateManifestPayload(
-    [property: JsonPropertyOrder(0)] string Version,
-    [property: JsonPropertyOrder(1)] DateTimeOffset PublishedAtUtc,
-    [property: JsonPropertyOrder(2)] UpdatePackage Package,
-    [property: JsonPropertyOrder(3)] string ReleaseNotes,
-    [property: JsonPropertyOrder(4)] string ReleasePageUrl);
+    [property: JsonPropertyOrder(0)] long Sequence,
+    [property: JsonPropertyOrder(1)] DateTimeOffset IssuedAtUtc,
+    [property: JsonPropertyOrder(2)] DateTimeOffset ExpiresAtUtc,
+    [property: JsonPropertyOrder(3)] string Version,
+    [property: JsonPropertyOrder(4)] UpdatePackage Package,
+    [property: JsonPropertyOrder(5)] string ReleaseNotes,
+    [property: JsonPropertyOrder(6)] string ReleasePageUrl);
 
 public sealed record SignedUpdateManifest(
     [property: JsonPropertyOrder(0)] int SchemaVersion,
@@ -22,7 +24,7 @@ public sealed record SignedUpdateManifest(
     [property: JsonPropertyOrder(2)] string SignatureAlgorithm,
     [property: JsonPropertyOrder(3)] string Signature)
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public static SignedUpdateManifest Create(
         UpdateManifestPayload payload,
@@ -43,6 +45,7 @@ public enum UpdateDecisionKind
 {
     Current,
     Required,
+    StaleManifest,
     InvalidManifest,
 }
 
@@ -56,7 +59,8 @@ public static class UpdatePolicyEvaluator
     public static UpdateDecision Evaluate(
         SemanticVersion currentVersion,
         SignedUpdateManifest manifest,
-        string publicKeyPem)
+        string publicKeyPem,
+        DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         if (!manifest.HasValidSignature(publicKeyPem))
@@ -75,15 +79,33 @@ public static class UpdatePolicyEvaluator
             return Invalid(packageError);
         }
 
-        return targetVersion > currentVersion
-            ? new UpdateDecision(
+        if (manifest.Payload.Sequence <= 0 ||
+            manifest.Payload.ExpiresAtUtc <= manifest.Payload.IssuedAtUtc ||
+            manifest.Payload.IssuedAtUtc > now.AddMinutes(5))
+        {
+            return Invalid("The update manifest sequence or validity window is invalid.");
+        }
+
+        if (manifest.Payload.ExpiresAtUtc <= now)
+        {
+            return new UpdateDecision(
+                UpdateDecisionKind.StaleManifest,
+                targetVersion,
+                "The signed update manifest has expired.");
+        }
+
+        if (targetVersion > currentVersion)
+        {
+            return new UpdateDecision(
                 UpdateDecisionKind.Required,
                 targetVersion,
-                "A newer signed release must be installed before continuing.")
-            : new UpdateDecision(
-                UpdateDecisionKind.Current,
-                targetVersion,
-                "The installed version is current.");
+                "A newer signed release must be installed before continuing.");
+        }
+
+        return new UpdateDecision(
+            UpdateDecisionKind.Current,
+            targetVersion,
+            "The installed version is current.");
     }
 
     private static UpdateDecision Invalid(string reason) =>

@@ -21,8 +21,10 @@ public sealed record AnnouncementMessage(
     [property: JsonPropertyOrder(8)] string? MaximumVersion);
 
 public sealed record AnnouncementFeedPayload(
-    [property: JsonPropertyOrder(0)] DateTimeOffset GeneratedAtUtc,
-    [property: JsonPropertyOrder(1)] IReadOnlyList<AnnouncementMessage> Messages);
+    [property: JsonPropertyOrder(0)] long Sequence,
+    [property: JsonPropertyOrder(1)] DateTimeOffset IssuedAtUtc,
+    [property: JsonPropertyOrder(2)] DateTimeOffset ExpiresAtUtc,
+    [property: JsonPropertyOrder(3)] IReadOnlyList<AnnouncementMessage> Messages);
 
 public sealed record SignedAnnouncementFeed(
     [property: JsonPropertyOrder(0)] int SchemaVersion,
@@ -30,7 +32,7 @@ public sealed record SignedAnnouncementFeed(
     [property: JsonPropertyOrder(2)] string SignatureAlgorithm,
     [property: JsonPropertyOrder(3)] string Signature)
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public static SignedAnnouncementFeed Create(
         AnnouncementFeedPayload payload,
@@ -59,6 +61,14 @@ public static class AnnouncementSelector
         ArgumentNullException.ThrowIfNull(feed);
         ArgumentNullException.ThrowIfNull(shownRevisions);
         if (!feed.HasValidSignature(publicKeyPem))
+        {
+            return [];
+        }
+
+        if (feed.Payload.Sequence <= 0 ||
+            feed.Payload.ExpiresAtUtc <= feed.Payload.IssuedAtUtc ||
+            feed.Payload.IssuedAtUtc > now.AddMinutes(5) ||
+            feed.Payload.ExpiresAtUtc <= now)
         {
             return [];
         }
