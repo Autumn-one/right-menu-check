@@ -212,7 +212,19 @@ public sealed class ContextMenuRowViewModel : ObservableObject
     private string GetFileTypeScope()
     {
         var classPath = Registration.ClassPath;
-        return classPath.StartsWith('.') ? $"文件 {classPath}" : "特定文件类型";
+        if (classPath.StartsWith('.'))
+        {
+            return $"文件 {classPath}";
+        }
+
+        var extensions = Registration.FileAssociations
+            .Select(static association => association.Extension)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToArray();
+        return extensions.Length == 0
+            ? "特定文件类型"
+            : $"文件 {string.Join(", ", extensions)}";
     }
 
     private string GetStateText()

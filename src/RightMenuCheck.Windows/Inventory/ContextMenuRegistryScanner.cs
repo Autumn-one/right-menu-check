@@ -54,6 +54,7 @@ public sealed class ContextMenuRegistryScanner
         var registrations = new List<ContextMenuRegistration>();
         var issues = new List<RegistryScanIssue>();
         var blockedClsids = LoadBlockedClsids(issues, cancellationToken);
+        var fileAssociations = LoadFileAssociations(issues, cancellationToken);
 
         foreach (var view in _reader.AvailableViews)
         {
@@ -88,6 +89,7 @@ public sealed class ContextMenuRegistryScanner
         }
 
         MarkCurrentUserOverrides(registrations);
+        AttachFileAssociationEvidence(registrations, fileAssociations);
         stopwatch.Stop();
 
         var ordered = registrations
@@ -100,6 +102,116 @@ public sealed class ContextMenuRegistryScanner
 
         return new ContextMenuScanResult(startedAt, stopwatch.Elapsed, ordered, issues.ToArray());
     }
+
+    private Dictionary<RegistryViewKind, FileAssociationEvidence[]> LoadFileAssociations(
+        List<RegistryScanIssue> issues,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<RegistryViewKind, FileAssociationEvidence[]>();
+        foreach (var view in _reader.AvailableViews)
+        {
+            var associations = new List<FileAssociationEvidence>();
+            foreach (var hive in Enum.GetValues<RegistryHiveKind>())
+            {
+                foreach (var className in SafeGetSubKeyNames(hive, view, ClassesRoot, issues))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!className.StartsWith('.'))
+                    {
+                        continue;
+                    }
+
+                    var extensionPath = Combine(ClassesRoot, className);
+                    var defaultProgId = NormalizeOptionalText(ReadString(
+                        hive,
+                        view,
+                        extensionPath,
+                        valueName: null,
+                        issues));
+                    var perceivedType = NormalizeOptionalText(ReadString(
+                        hive,
+                        view,
+                        extensionPath,
+                        "PerceivedType",
+                        issues));
+                    var openWithPath = Combine(extensionPath, "OpenWithProgids");
+                    var openWithProgIds = SafeGetValueNames(
+                            hive,
+                            view,
+                            openWithPath,
+                            issues)
+                        .Where(static name => !string.IsNullOrWhiteSpace(name))
+                        .Order(StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                    if (defaultProgId is null && perceivedType is null &&
+                        openWithProgIds.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    associations.Add(new FileAssociationEvidence(
+                        new RegistrySource(hive, view, extensionPath),
+                        className,
+                        defaultProgId,
+                        perceivedType,
+                        openWithProgIds));
+                }
+            }
+
+            result.Add(
+                view,
+                associations
+                    .OrderBy(static association => association.Extension, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(static association => association.Source.Hive)
+                    .ToArray());
+        }
+
+        return result;
+    }
+
+    private static void AttachFileAssociationEvidence(
+        List<ContextMenuRegistration> registrations,
+        Dictionary<RegistryViewKind, FileAssociationEvidence[]> associationsByView)
+    {
+        for (var index = 0; index < registrations.Count; index++)
+        {
+            var registration = registrations[index];
+            var view = GetRegistrySource(registration).View;
+            var matches = associationsByView[view]
+                .Where(association => AssociationAppliesToClass(
+                    association,
+                    registration.ClassPath))
+                .ToArray();
+            if (matches.Length > 0)
+            {
+                registrations[index] = registration with { FileAssociations = matches };
+            }
+        }
+    }
+
+    private static bool AssociationAppliesToClass(
+        FileAssociationEvidence association,
+        string classPath)
+    {
+        if (classPath.Equals(association.Extension, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        const string systemFileAssociationPrefix = "SystemFileAssociations\\";
+        if (classPath.StartsWith(systemFileAssociationPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var associationClass = classPath[systemFileAssociationPrefix.Length..];
+            return associationClass.Equals(association.Extension, StringComparison.OrdinalIgnoreCase) ||
+                   associationClass.Equals(association.PerceivedType, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return classPath.Equals(association.DefaultProgId, StringComparison.OrdinalIgnoreCase) ||
+               association.OpenWithProgIds.Contains(classPath, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string? NormalizeOptionalText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private Dictionary<RegistryViewKind, HashSet<string>> LoadBlockedClsids(
         List<RegistryScanIssue> issues,

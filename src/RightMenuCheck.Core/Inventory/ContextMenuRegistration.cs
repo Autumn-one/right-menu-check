@@ -47,6 +47,13 @@ public sealed record PackageContextMenuSource(
     PackageArchitectureKind Architecture,
     string ManifestPath) : ContextMenuSource;
 
+public sealed record FileAssociationEvidence(
+    RegistrySource Source,
+    string Extension,
+    string? DefaultProgId,
+    string? PerceivedType,
+    IReadOnlyList<string> OpenWithProgIds);
+
 [Flags]
 public enum ContextMenuRegistrationStatus
 {
@@ -95,6 +102,8 @@ public sealed record ContextMenuRegistration
     public string? ExtendedSubCommandsKey { get; init; }
 
     public IReadOnlyList<string> SubCommands { get; init; } = [];
+
+    public IReadOnlyList<FileAssociationEvidence> FileAssociations { get; init; } = [];
 
     public bool IsVisibleByDefault =>
         (Status & (ContextMenuRegistrationStatus.Blocked |

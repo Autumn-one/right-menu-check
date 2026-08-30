@@ -81,6 +81,24 @@ public sealed class ContextMenuRegistryScannerTests
         reader.SetValue(
             RegistryHiveKind.LocalMachine,
             View,
+            "Software\\Classes\\.sample",
+            valueName: null,
+            "samplefile");
+        reader.SetValue(
+            RegistryHiveKind.LocalMachine,
+            View,
+            "Software\\Classes\\.sample",
+            "PerceivedType",
+            "image");
+        reader.SetValue(
+            RegistryHiveKind.LocalMachine,
+            View,
+            "Software\\Classes\\.sample\\OpenWithProgids",
+            "sample.alt",
+            string.Empty);
+        reader.SetValue(
+            RegistryHiveKind.LocalMachine,
+            View,
             "Software\\Classes\\.sample\\shell\\inspect\\command",
             valueName: null,
             "sample-inspector.exe \"%1\"");
@@ -93,6 +111,12 @@ public sealed class ContextMenuRegistryScannerTests
         reader.SetValue(
             RegistryHiveKind.LocalMachine,
             View,
+            "Software\\Classes\\sample.alt\\shell\\alternate\\command",
+            valueName: null,
+            "sample-alternate.exe \"%1\"");
+        reader.SetValue(
+            RegistryHiveKind.LocalMachine,
+            View,
             "Software\\Classes\\SystemFileAssociations\\image\\shell\\rotate\\command",
             valueName: null,
             "image-tool.exe \"%1\"");
@@ -101,12 +125,26 @@ public sealed class ContextMenuRegistryScannerTests
 
         Assert.Contains(result.Registrations, item => item.ClassPath == ".sample");
         Assert.Contains(result.Registrations, item => item.ClassPath == "samplefile");
+        Assert.Contains(result.Registrations, item => item.ClassPath == "sample.alt");
         Assert.Contains(
             result.Registrations,
             item => item.ClassPath == "SystemFileAssociations\\image");
         Assert.All(
             result.Registrations,
             item => Assert.Equal(ContextMenuTargetKind.FileType, item.TargetKind));
+        Assert.Contains(
+            result.Registrations.Single(item => item.ClassPath == "samplefile").FileAssociations,
+            association => association.Extension == ".sample" &&
+                           association.DefaultProgId == "samplefile");
+        Assert.Contains(
+            result.Registrations.Single(item =>
+                item.ClassPath == "SystemFileAssociations\\image").FileAssociations,
+            association => association.Extension == ".sample" &&
+                           association.PerceivedType == "image");
+        Assert.Contains(
+            result.Registrations.Single(item => item.ClassPath == "sample.alt").FileAssociations,
+            association => association.Extension == ".sample" &&
+                           association.OpenWithProgIds.Contains("sample.alt"));
     }
 
     [Fact]
