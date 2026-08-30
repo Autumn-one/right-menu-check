@@ -158,30 +158,40 @@ public sealed class ProbeWorkerClient : IProbeWorkerClient
             }
             catch (EndOfStreamException exception)
             {
-                return CreateProtocolFailure(exception);
+                return await CreateProtocolFailureAsync(exception).ConfigureAwait(false);
             }
             catch (InvalidDataException exception)
             {
-                return CreateProtocolFailure(exception);
+                return await CreateProtocolFailureAsync(exception).ConfigureAwait(false);
             }
             catch (JsonException exception)
             {
-                return CreateProtocolFailure(exception);
+                return await CreateProtocolFailureAsync(exception).ConfigureAwait(false);
             }
             catch (IOException exception)
             {
-                return CreateProtocolFailure(exception);
+                return await CreateProtocolFailureAsync(exception).ConfigureAwait(false);
             }
 
-            ProbeResponse CreateProtocolFailure(Exception exception) => CreateFailure(
-                request,
-                ProbeOutcome.ProtocolError,
-                startedAt,
-                stopwatch.Elapsed,
-                process.Id,
-                exception.GetType().Name,
-                exception.Message,
-                Marshal.GetHRForException(exception));
+            async Task<ProbeResponse> CreateProtocolFailureAsync(Exception exception)
+            {
+                await WaitForWorkerExitAsync(process).ConfigureAwait(false);
+                var workerEvidence = process.HasExited
+                    ? await ReadBoundedOutputAsync(standardErrorTask).ConfigureAwait(false)
+                    : string.Empty;
+                var message = string.IsNullOrWhiteSpace(workerEvidence)
+                    ? exception.Message
+                    : $"{exception.Message} Worker stderr: {workerEvidence.Trim()}";
+                return CreateFailure(
+                    request,
+                    ProbeOutcome.ProtocolError,
+                    startedAt,
+                    stopwatch.Elapsed,
+                    process.Id,
+                    exception.GetType().Name,
+                    message,
+                    Marshal.GetHRForException(exception));
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

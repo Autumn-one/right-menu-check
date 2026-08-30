@@ -7,7 +7,7 @@ namespace RightMenuCheck.IntegrationTests.Probe;
 public sealed class ProbeWorkerClientTests
 {
     [Fact]
-    public async Task RunCompletesAuthenticatedCurrentUserPipeHandshake()
+    public async Task RunReturnsStructuredActivationFailureForUnregisteredHandler()
     {
         var client = new ProbeWorkerClient();
         var invocation = new ProbeInvocation(
@@ -22,13 +22,73 @@ public sealed class ProbeWorkerClientTests
 
         var response = await client.RunAsync(invocation, options, CancellationToken.None);
 
-        Assert.Equal(ProbeOutcome.NotApplicable, response.Outcome);
+        Assert.True(
+            response.Outcome == ProbeOutcome.ActivationFailed,
+            $"Expected ActivationFailed but received {response.Outcome}: {response.Error}");
         Assert.Equal(ProbeProtocol.CurrentVersion, response.ProtocolVersion);
         Assert.NotEqual(Guid.Empty, response.RequestId);
         Assert.True(response.WorkerProcessId > 0);
         Assert.False(string.IsNullOrWhiteSpace(response.WorkerArchitecture));
         Assert.NotNull(response.Error);
-        Assert.Equal("ProbeEnginePending", response.Error.Type);
+        Assert.Equal("CoCreateInstance", response.Error.Type);
+    }
+
+    [Fact]
+    public async Task RunMeasuresClassicContextMenuWithoutInvokingCommand()
+    {
+        var client = new ProbeWorkerClient();
+        var invocation = new ProbeInvocation(
+            ProbeOperation.ClassicContextMenu,
+            ProbeTargetKind.File,
+            "{09799AFB-AD67-11D1-ABCD-00C04FC30936}",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "win.ini"),
+            "*");
+
+        var response = await client.RunAsync(
+            invocation,
+            CreateWorkerOptions(TimeSpan.FromSeconds(10)),
+            CancellationToken.None);
+
+        Assert.True(
+            response.Outcome == ProbeOutcome.Success,
+            $"Expected Success but received {response.Outcome}: {response.Error}");
+        Assert.Contains(response.Phases, phase => phase.Phase == ProbePhase.ComActivation);
+        Assert.Contains(response.Phases, phase => phase.Phase == ProbePhase.ShellInitialization);
+        Assert.Contains(response.Phases, phase => phase.Phase == ProbePhase.MenuConstruction);
+        Assert.All(response.Phases, phase =>
+        {
+            Assert.True(phase.Succeeded);
+            Assert.True(phase.DurationMilliseconds >= 0);
+        });
+    }
+
+    [Fact]
+    public async Task RunMeasuresPackagedExplorerCommandWithoutInvokingCommand()
+    {
+        var client = new ProbeWorkerClient();
+        var invocation = new ProbeInvocation(
+            ProbeOperation.ExplorerCommand,
+            ProbeTargetKind.FolderBackground,
+            "{9F156763-7844-4DC4-B2B1-901F640F5155}",
+            Path.GetTempPath(),
+            "Directory\\Background");
+
+        var response = await client.RunAsync(
+            invocation,
+            CreateWorkerOptions(TimeSpan.FromSeconds(10)),
+            CancellationToken.None);
+
+        Assert.True(
+            response.Outcome == ProbeOutcome.Success,
+            $"Expected Success but received {response.Outcome}: {response.Error}");
+        Assert.Contains(response.Phases, phase => phase.Phase == ProbePhase.ComActivation);
+        Assert.Contains(response.Phases, phase => phase.Phase == ProbePhase.GetTitle);
+        Assert.Contains(response.Phases, phase => phase.Phase == ProbePhase.GetIcon);
+        Assert.Contains(response.Phases, phase => phase.Phase == ProbePhase.GetState);
+        Assert.Contains(response.Phases, phase => phase.Phase == ProbePhase.EnumerateSubCommands);
+        Assert.DoesNotContain(
+            response.Phases,
+            phase => phase.Phase == ProbePhase.MenuConstruction);
     }
 
     [Fact]
@@ -51,6 +111,9 @@ public sealed class ProbeWorkerClientTests
         Assert.True(response.WorkerProcessId > 0);
         await AssertProcessExitedAsync(response.WorkerProcessId);
     }
+
+    private static ProbeWorkerOptions CreateWorkerOptions(TimeSpan timeout) =>
+        new(GetBuiltExecutable("RightMenuCheck.Probe.Worker"), timeout);
 
     private static async Task AssertProcessExitedAsync(int processId)
     {

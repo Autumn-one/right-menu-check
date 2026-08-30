@@ -45,23 +45,8 @@ internal static class ProbeWorkerHost
                 return 4;
             }
 
-            var startedAt = DateTimeOffset.UtcNow;
-            var stopwatch = Stopwatch.StartNew();
-            stopwatch.Stop();
-            var response = new ProbeResponse(
-                ProbeProtocol.CurrentVersion,
-                request.RequestId,
-                arguments.Nonce,
-                ProbeOutcome.NotApplicable,
-                Environment.ProcessId,
-                RuntimeInformation.ProcessArchitecture.ToString(),
-                startedAt,
-                stopwatch.Elapsed.TotalMilliseconds,
-                Phases: [],
-                new ProbeError(
-                    "ProbeEnginePending",
-                    "The isolated worker handshake succeeded; COM probing is not enabled in this build step.",
-                    HResult: null));
+            timeoutSource.CancelAfter(Timeout.InfiniteTimeSpan);
+            var response = await StaProbeRunner.RunAsync(request).ConfigureAwait(false);
             await ProbeMessageSerializer
                 .WriteResponseAsync(pipe, response, timeoutSource.Token)
                 .ConfigureAwait(false);
