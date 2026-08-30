@@ -28,6 +28,14 @@ The database stores:
 
 The service does not read or persist request IP addresses, User-Agent, usernames, filesystem paths, hardware details, raw session tokens, or heartbeat history. It has no HTTP access log. Error responses and operational logs never contain machine IDs, session IDs, tokens, request bodies, or client network information.
 
+### Storage permissions
+
+On Windows, startup replaces and verifies the database-directory DACL before SQLite opens the database. The protected DACL grants Full Control only to the current service user, LocalSystem, and the built-in Administrators group. Its child inheritance protects newly created WAL/SHM files, and every database or sidecar file already present is explicitly protected and verified. Authenticated Users, Users, and other ordinary SIDs are not retained. If the current identity cannot write or verify the DACL, startup fails closed before telemetry data is opened.
+
+Run the service under its final Windows identity from the first start. For a pre-provisioned location, the deployment administrator must make that identity, LocalSystem, or Administrators the owner and grant the service identity permission to replace the DACL; the service still rewrites and verifies the exact allowlist on every open. Changing the service identity requires reprovisioning ownership or DACL-control rights.
+
+On Unix-like systems, the database directory is restricted to mode 0700 and existing database/WAL/SHM files to mode 0600.
+
 ## Client protocol
 
 All JSON is strict camelCase. Unknown fields and multiple JSON values are rejected. The default body limit is 4 KiB. All timestamps are server-received UTC timestamps.

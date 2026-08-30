@@ -143,8 +143,11 @@ func OpenWithLimits(ctx context.Context, path string, limits Limits) (*Store, er
 		if err := os.MkdirAll(directory, 0o700); err != nil {
 			return nil, fmt.Errorf("create database directory: %w", err)
 		}
-		if err := os.Chmod(directory, 0o700); err != nil {
+		if err := secureStorageDirectory(directory); err != nil {
 			return nil, fmt.Errorf("restrict database directory permissions: %w", err)
+		}
+		if err := secureStorageFiles(path); err != nil {
+			return nil, fmt.Errorf("restrict existing database permissions: %w", err)
 		}
 	}
 
@@ -186,14 +189,25 @@ func OpenWithLimits(ctx context.Context, path string, limits Limits) (*Store, er
 		return closeOnError("check database integrity", fmt.Errorf("result was %q", integrity))
 	}
 	if path != ":memory:" {
-		for _, databaseFile := range []string{path, path + "-wal", path + "-shm"} {
-			if err := os.Chmod(databaseFile, 0o600); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return closeOnError("restrict database permissions", err)
-			}
+		if err := secureStorageFiles(path); err != nil {
+			return closeOnError("restrict database permissions", err)
 		}
 	}
 
 	return &Store{db: db, limits: limits}, nil
+}
+
+func secureStorageFiles(databasePath string) error {
+	for _, databaseFile := range []string{
+		databasePath,
+		databasePath + "-wal",
+		databasePath + "-shm",
+	} {
+		if err := secureStorageFile(databaseFile); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) Close() error {
