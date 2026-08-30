@@ -118,7 +118,8 @@
                      Foreground="{StaticResource TextSecondaryBrush}"
                      VerticalAlignment="Center"
                      Margin="0,0,6,0" />
-          <ComboBox Width="64"
+          <ComboBox Width="76"
+                    AutomationProperties.Name="测试次数"
                     ItemsSource="{Binding TrialCounts}"
                     SelectedItem="{Binding TrialCount}" />
         </StackPanel>
@@ -214,7 +215,8 @@
                  SelectedValue="{Binding SelectedCategory}"
                  BorderThickness="0"
                  Background="Transparent"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.VerticalScrollBarVisibility="Disabled">
           <ListBox.ItemsPanel>
             <ItemsPanelTemplate>
               <StackPanel Orientation="Horizontal" />
