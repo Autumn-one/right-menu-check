@@ -8,6 +8,7 @@ public sealed class ApplicationOwnershipResolver
 {
     private readonly InstalledApplicationCatalogResult _applicationCatalog;
     private readonly InstalledPackageCatalogResult _packageCatalog;
+    private readonly ApplicationPathMatch[] _applicationPathMatches;
 
     public ApplicationOwnershipResolver(
         IInstalledApplicationCatalog applicationCatalog,
@@ -18,13 +19,21 @@ public sealed class ApplicationOwnershipResolver
         _applicationCatalog = applicationCatalog.GetApplications();
         _packageCatalog = packageCatalog.GetPackages();
 
-        CatalogIssues = _applicationCatalog.Issues
+        var catalogIssues = _applicationCatalog.Issues
             .Concat(_packageCatalog.Issues.Select(static issue => new MetadataIssue(
                 issue.PackageName,
                 issue.Operation,
                 issue.ErrorType,
                 issue.Message)))
+            .ToList();
+        _applicationPathMatches = _applicationCatalog.Applications
+            .SelectMany(application => GetApplicationPathEvidence(application, catalogIssues)
+                .Select(evidence => new ApplicationPathMatch(
+                    application,
+                    evidence.RootPath,
+                    evidence.Kind)))
             .ToArray();
+        CatalogIssues = catalogIssues.ToArray();
     }
 
     public IReadOnlyList<MetadataIssue> CatalogIssues { get; }
@@ -66,7 +75,7 @@ public sealed class ApplicationOwnershipResolver
                 QuietUninstallString: null,
                 IsWindowsInstaller: false,
                 IsSystemProtected: false,
-                "The package manifest directly identifies the owning PackageFullName; package metadata is unavailable.");
+                "清单已精确给出 PackageFullName，但系统未返回该包的更多元数据。");
         }
 
         var isSystemProtected = IsMicrosoftPublisher(package.Publisher) ||
@@ -90,7 +99,7 @@ public sealed class ApplicationOwnershipResolver
             QuietUninstallString: null,
             IsWindowsInstaller: false,
             isSystemProtected,
-            "The manifest PackageFullName exactly matches the installed package catalog.");
+            "清单中的 PackageFullName 与系统已安装包目录精确匹配。");
     }
 
     private ApplicationOwnerMetadata ResolveRegistryOwner(
@@ -121,7 +130,7 @@ public sealed class ApplicationOwnershipResolver
                 QuietUninstallString: null,
                 IsWindowsInstaller: false,
                 IsSystemProtected: true,
-                "The resolved handler binary is inside the Windows system directory tree.");
+                "处理程序二进制文件位于 Windows 系统目录中。");
         }
 
         var installLocationMatches = _applicationCatalog.Applications
@@ -146,12 +155,25 @@ public sealed class ApplicationOwnershipResolver
             return CreateInstalledApplicationOwner(
                 installLocationMatches.Application,
                 OwnershipConfidence.High,
-                "The resolved handler path is within the application's InstallLocation.");
+                "处理程序路径位于该应用声明的 InstallLocation 中。");
+        }
+
+        var supportingPathMatch = FindSupportingPathMatch(candidatePaths);
+        if (supportingPathMatch is not null)
+        {
+            var reason = supportingPathMatch.Kind == ApplicationPathEvidenceKind.DisplayIcon
+                ? "处理程序路径与该卸载项的 DisplayIcon 位于同一应用目录中。"
+                : "处理程序路径与该卸载项的卸载程序位于同一应用目录中。";
+            return CreateInstalledApplicationOwner(
+                supportingPathMatch.Application,
+                OwnershipConfidence.High,
+                reason);
         }
 
         var companies = metadata.Components
-            .Select(component => component.Binary?.CompanyName)
+            .Select(static component => component.Binary?.CompanyName)
             .Where(static company => !string.IsNullOrWhiteSpace(company))
+            .Cast<string>()
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var publisherMatches = _applicationCatalog.Applications
@@ -168,14 +190,43 @@ public sealed class ApplicationOwnershipResolver
             return CreateInstalledApplicationOwner(
                 publisherMatches[0],
                 OwnershipConfidence.Low,
-                "The binary CompanyName uniquely matches one uninstall publisher; no path ownership was proven.");
+                "二进制发布者只匹配到一个卸载项，但尚无路径证据，因此仅作线索。");
         }
+
+        var publishers = metadata.Components
+            .SelectMany(static component => new[]
+            {
+                component.Binary?.Signature.PublisherName,
+                component.Binary?.CompanyName,
+            })
+            .Where(static publisher => !string.IsNullOrWhiteSpace(publisher))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var productNames = metadata.Components
+            .Select(static component => component.Binary?.ProductName)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var descriptions = metadata.Components
+            .Select(static component => component.Binary?.Description)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var binaryIdentity = productNames.Length == 1
+            ? productNames[0]
+            : descriptions.Length == 1
+                ? descriptions[0]
+                : null;
 
         return new ApplicationOwnerMetadata(
             ApplicationOwnerKind.Unknown,
-            OwnershipConfidence.None,
-            metadata.Registration.DisplayName,
-            Publisher: companies.Length == 1 ? companies[0] : null,
+            binaryIdentity is null ? OwnershipConfidence.None : OwnershipConfidence.Low,
+            binaryIdentity ?? metadata.Registration.DisplayName,
+            Publisher: publishers.Length == 1 ? publishers[0] : null,
             Version: null,
             InstallLocation: null,
             ProductCode: null,
@@ -186,7 +237,194 @@ public sealed class ApplicationOwnershipResolver
             QuietUninstallString: null,
             IsWindowsInstaller: false,
             IsSystemProtected: false,
-            "No installed application path, exact package identity, or unique publisher match was found.");
+            binaryIdentity is null
+                ? "未找到安装目录、包身份或唯一发布者匹配，无法确认所属应用。"
+                : "名称仅来自处理程序文件的产品信息，尚未匹配到 Windows 已安装应用，不能据此卸载。");
+    }
+
+    private ApplicationPathMatch? FindSupportingPathMatch(IReadOnlyList<string> candidatePaths)
+    {
+        var matches = _applicationPathMatches
+            .Where(match => candidatePaths.Any(path => IsPathWithin(path, match.RootPath)))
+            .OrderByDescending(static match => match.RootPath.Length)
+            .ToArray();
+        if (matches.Length == 0)
+        {
+            return null;
+        }
+
+        var longestPathLength = matches[0].RootPath.Length;
+        // Supporting paths are high confidence only when the most specific root has one owner.
+        var mostSpecificMatches = matches
+            .Where(match => match.RootPath.Length == longestPathLength)
+            .GroupBy(static match => match.Application.KeyName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (mostSpecificMatches.Length != 1)
+        {
+            return null;
+        }
+
+        return mostSpecificMatches[0]
+            .OrderBy(static match => match.Kind)
+            .ThenByDescending(static match =>
+                match.Application.Source.Hive == RegistryHiveKind.CurrentUser)
+            .ThenBy(static match => match.Application.Source.View)
+            .First();
+    }
+
+    private static ApplicationPathEvidence[] GetApplicationPathEvidence(
+        InstalledApplicationInfo application,
+        List<MetadataIssue> issues)
+    {
+        var evidence = new List<ApplicationPathEvidence>();
+        AddEvidence(
+            TryGetDisplayIconPath(application.DisplayIcon),
+            ApplicationPathEvidenceKind.DisplayIcon);
+        AddEvidence(
+            TryGetUninstallExecutable(application.UninstallString, application, issues),
+            ApplicationPathEvidenceKind.UninstallExecutable);
+        AddEvidence(
+            TryGetUninstallExecutable(application.QuietUninstallString, application, issues),
+            ApplicationPathEvidenceKind.UninstallExecutable);
+        return evidence
+            .DistinctBy(static item => (item.RootPath.ToUpperInvariant(), item.Kind))
+            .ToArray();
+
+        void AddEvidence(string? executablePath, ApplicationPathEvidenceKind kind)
+        {
+            if (string.IsNullOrWhiteSpace(executablePath))
+            {
+                return;
+            }
+
+            string expandedExecutable;
+            try
+            {
+                expandedExecutable = Environment.ExpandEnvironmentVariables(executablePath);
+                if (!Path.IsPathFullyQualified(expandedExecutable))
+                {
+                    return;
+                }
+            }
+            catch (ArgumentException exception)
+            {
+                issues.Add(new MetadataIssue(
+                    application.KeyName,
+                    "NormalizeOwnershipEvidencePath",
+                    exception.GetType().Name,
+                    exception.Message));
+                return;
+            }
+
+            var normalizedExecutable = TryNormalizePath(
+                expandedExecutable,
+                application.KeyName,
+                issues);
+            var directory = normalizedExecutable is null
+                ? null
+                : Path.GetDirectoryName(normalizedExecutable);
+            var normalizedDirectory = TryNormalizePath(
+                directory,
+                application.KeyName,
+                issues);
+            if (normalizedDirectory is not null && IsSpecificApplicationRoot(normalizedDirectory))
+            {
+                evidence.Add(new ApplicationPathEvidence(normalizedDirectory, kind));
+            }
+        }
+    }
+
+    private static string? TryGetDisplayIconPath(string? displayIcon)
+    {
+        if (string.IsNullOrWhiteSpace(displayIcon))
+        {
+            return null;
+        }
+
+        var value = displayIcon.Trim().TrimStart('@');
+        if (value.Length > 1 && value[0] == '"')
+        {
+            var closingQuote = value.IndexOf('"', 1);
+            if (closingQuote > 1)
+            {
+                return value[1..closingQuote];
+            }
+        }
+
+        var comma = value.LastIndexOf(',');
+        if (comma > 0 && int.TryParse(
+                value.AsSpan(comma + 1),
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out _))
+        {
+            value = value[..comma];
+        }
+
+        return value.Trim().Trim('"');
+    }
+
+    private static string? TryGetUninstallExecutable(
+        string? uninstallCommand,
+        InstalledApplicationInfo application,
+        List<MetadataIssue> issues)
+    {
+        if (string.IsNullOrWhiteSpace(uninstallCommand))
+        {
+            return null;
+        }
+
+        try
+        {
+            var executable = CommandLineParser.TryGetExecutable(uninstallCommand);
+            return executable is not null &&
+                   Path.GetExtension(executable).Equals(".exe", StringComparison.OrdinalIgnoreCase)
+                ? executable
+                : null;
+        }
+        catch (System.ComponentModel.Win32Exception exception)
+        {
+            issues.Add(new MetadataIssue(
+                application.KeyName,
+                "ParseOwnershipUninstallCommand",
+                exception.GetType().Name,
+                exception.Message));
+            return null;
+        }
+        catch (ArgumentException exception)
+        {
+            issues.Add(new MetadataIssue(
+                application.KeyName,
+                "ParseOwnershipUninstallCommand",
+                exception.GetType().Name,
+                exception.Message));
+            return null;
+        }
+    }
+
+    private static bool IsSpecificApplicationRoot(string path)
+    {
+        var pathRoot = Path.GetPathRoot(path);
+        if (pathRoot is null || path.Equals(
+                Path.TrimEndingDirectorySeparator(pathRoot),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var broadRoots = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Environment.SystemDirectory,
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFilesX86),
+        };
+        return !broadRoots
+            .Where(static root => !string.IsNullOrWhiteSpace(root))
+            .Select(Path.TrimEndingDirectorySeparator)
+            .Contains(path, StringComparer.OrdinalIgnoreCase);
     }
 
     private static ApplicationOwnerMetadata CreateInstalledApplicationOwner(
@@ -302,4 +540,19 @@ public sealed class ApplicationOwnershipResolver
 
     private static bool IsMicrosoftPublisher(string? publisher) =>
         publisher?.Contains("Microsoft", StringComparison.OrdinalIgnoreCase) == true;
+
+    private enum ApplicationPathEvidenceKind
+    {
+        DisplayIcon,
+        UninstallExecutable,
+    }
+
+    private sealed record ApplicationPathEvidence(
+        string RootPath,
+        ApplicationPathEvidenceKind Kind);
+
+    private sealed record ApplicationPathMatch(
+        InstalledApplicationInfo Application,
+        string RootPath,
+        ApplicationPathEvidenceKind Kind);
 }

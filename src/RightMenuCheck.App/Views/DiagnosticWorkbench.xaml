@@ -55,8 +55,10 @@
           </Button>
           <Button Style="{StaticResource ToolbarButtonStyle}"
                   AutomationProperties.Name="测试选中项"
+                  AutomationProperties.HelpText="逐项测量所选扩展参与右键菜单构建的耗时，不会执行菜单命令。"
                   IsEnabled="{Binding CanStart}"
-                  Click="BenchmarkSelected_Click">
+                  Click="BenchmarkSelected_Click"
+                  ToolTip="逐项测量所选扩展参与右键菜单构建的耗时；不会执行菜单命令。">
             <StackPanel Orientation="Horizontal">
               <TextBlock FontFamily="Segoe Fluent Icons"
                          FontSize="14"
@@ -66,15 +68,21 @@
             </StackPanel>
           </Button>
           <Button Style="{StaticResource ToolbarButtonStyle}"
-                  AutomationProperties.Name="整体菜单"
+                  AutomationProperties.Name="整体菜单基准"
+                  AutomationProperties.HelpText="在隔离进程中构建适用于当前样本的完整 Shell 右键菜单并计时，不会执行菜单命令。"
                   IsEnabled="{Binding CanStart}"
                   Click="BenchmarkAggregate_Click">
+            <Button.ToolTip>
+              <TextBlock MaxWidth="380"
+                         TextWrapping="Wrap"
+                         Text="在隔离进程中构建适用于当前样本的完整 Windows Shell 右键菜单并计时；不会执行菜单命令，也不等同于 Explorer 从点击到显示的完整延迟。用于判断整体是否慢，定位具体扩展请比较“测试选中项”。" />
+            </Button.ToolTip>
             <StackPanel Orientation="Horizontal">
               <TextBlock FontFamily="Segoe Fluent Icons"
                          FontSize="14"
                          Text="&#xE9D2;"
                          Margin="0,0,7,0" />
-              <TextBlock Text="整体菜单" />
+              <TextBlock Text="整体基准" />
             </StackPanel>
           </Button>
           <Button Style="{StaticResource IconButtonStyle}"
@@ -350,7 +358,7 @@
                               Width="62"
                               Binding="{Binding TimeoutCount, Mode=OneWay}"
                               ElementStyle="{StaticResource CellTextStyle}" />
-          <DataGridTextColumn Header="错误"
+          <DataGridTextColumn Header="失败"
                               Width="62"
                               Binding="{Binding FailureCount, Mode=OneWay}"
                               ElementStyle="{StaticResource CellTextStyle}" />
@@ -421,19 +429,27 @@
                 </StackPanel>
               </Button>
               <Button Style="{StaticResource ToolbarButtonStyle}"
-                      AutomationProperties.Name="卸载所属应用"
+                      AutomationProperties.Name="卸载整个所属应用"
+                      AutomationProperties.HelpText="先备份该应用的相关右键菜单注册，再启动整个应用的卸载流程。不是只删除当前菜单项。"
                       IsEnabled="{Binding HasSelectedItem}"
-                      Click="UninstallApplication_Click">
+                      Click="UninstallApplication_Click"
+                      ToolTip="先备份相关右键菜单，再卸载整个所属应用；不是只删除当前菜单项。">
                 <StackPanel Orientation="Horizontal">
                   <TextBlock FontFamily="Segoe Fluent Icons"
                              Text="&#xE7B8;"
                              Margin="0,0,6,0" />
-                  <TextBlock Text="卸载应用" />
+                  <TextBlock Text="卸载整个应用" />
                 </StackPanel>
               </Button>
             </WrapPanel>
             <TextBlock Text="所属应用" Style="{StaticResource DetailLabelStyle}" />
             <TextBlock Text="{Binding SelectedItem.OwnerName}" Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="识别依据" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.OwnerEvidence}"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="文件产品" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.BinaryProduct}"
+                       Style="{StaticResource DetailValueStyle}" />
             <TextBlock Text="发布者" Style="{StaticResource DetailLabelStyle}" />
             <TextBlock Text="{Binding SelectedItem.Publisher}" Style="{StaticResource DetailValueStyle}" />
             <TextBlock Text="范围 / 类型" Style="{StaticResource DetailLabelStyle}" />
@@ -471,6 +487,12 @@
             <TextBlock Text="{Binding SelectedItem.Median}" Style="{StaticResource DetailValueStyle}" />
             <TextBlock Text="P95" Style="{StaticResource DetailLabelStyle}" />
             <TextBlock Text="{Binding SelectedItem.Percentile95}" Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="试次" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.TrialSummary}"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="失败原因" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.BenchmarkFailureDetails}"
+                       Style="{StaticResource DetailValueStyle}" />
             <TextBlock Text="测量范围" Style="{StaticResource DetailLabelStyle}" />
             <TextBlock Text="{Binding SelectedItem.MeasurementScope}" Style="{StaticResource DetailValueStyle}" />
             <TextBlock Text="限制" Style="{StaticResource DetailLabelStyle}" />

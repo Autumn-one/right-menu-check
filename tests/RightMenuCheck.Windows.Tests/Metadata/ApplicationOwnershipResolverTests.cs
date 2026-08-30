@@ -110,6 +110,90 @@ public sealed class ApplicationOwnershipResolverTests
         Assert.Equal(OwnershipConfidence.Low, owner.Confidence);
     }
 
+    [Fact]
+    public void ResolveUsesDisplayIconDirectoryWhenInstallLocationIsMissing()
+    {
+        var application = CreateApplication("Photo Tool", installLocation: null, "PhotoKey") with
+        {
+            DisplayIcon = "\"C:\\Apps\\PhotoTool\\PhotoTool.exe\",0",
+        };
+        var resolver = CreateResolver([application], []);
+        var metadata = CreateMetadata(
+            CreateRegistryRegistration(),
+            CreateBinary("C:\\Apps\\PhotoTool\\ShellExtension.dll", companyName: null));
+
+        var result = resolver.Resolve(metadata);
+
+        var owner = Assert.IsType<ApplicationOwnerMetadata>(result.Owner);
+        Assert.Equal("Photo Tool", owner.DisplayName);
+        Assert.Equal(OwnershipConfidence.High, owner.Confidence);
+        Assert.Contains("DisplayIcon", owner.MatchReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResolveUsesUninstallerDirectoryWhenInstallLocationIsMissing()
+    {
+        var application = CreateApplication("Editor Tool", installLocation: null, "EditorKey") with
+        {
+            UninstallString = "\"C:\\Apps\\EditorTool\\uninstall.exe\" /remove",
+        };
+        var resolver = CreateResolver([application], []);
+        var metadata = CreateMetadata(
+            CreateRegistryRegistration(),
+            CreateBinary("C:\\Apps\\EditorTool\\EditorShell.dll", companyName: null));
+
+        var result = resolver.Resolve(metadata);
+
+        var owner = Assert.IsType<ApplicationOwnerMetadata>(result.Owner);
+        Assert.Equal("Editor Tool", owner.DisplayName);
+        Assert.Equal(OwnershipConfidence.High, owner.Confidence);
+        Assert.Contains("卸载程序", owner.MatchReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResolveUsesBinaryProductNameAsNonUninstallableClue()
+    {
+        var resolver = CreateResolver([], []);
+        var metadata = CreateMetadata(
+            CreateRegistryRegistration(),
+            CreateBinary(
+                "D:\\Unmapped\\CloudShell.dll",
+                "Cloud Publisher",
+                productName: "Cloud Music"));
+
+        var result = resolver.Resolve(metadata);
+
+        var owner = Assert.IsType<ApplicationOwnerMetadata>(result.Owner);
+        Assert.Equal(ApplicationOwnerKind.Unknown, owner.Kind);
+        Assert.Equal(OwnershipConfidence.Low, owner.Confidence);
+        Assert.Equal("Cloud Music", owner.DisplayName);
+        Assert.Null(owner.UninstallString);
+        Assert.Contains("不能据此卸载", owner.MatchReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResolveDoesNotClaimAmbiguousSupportingDirectory()
+    {
+        var first = CreateApplication("Suite A", installLocation: null, "SuiteA") with
+        {
+            DisplayIcon = "C:\\Apps\\SharedSuite\\First.exe,0",
+        };
+        var second = CreateApplication("Suite B", installLocation: null, "SuiteB") with
+        {
+            UninstallString = "C:\\Apps\\SharedSuite\\uninstall.exe /product B",
+        };
+        var resolver = CreateResolver([first, second], []);
+        var metadata = CreateMetadata(
+            CreateRegistryRegistration(),
+            CreateBinary("C:\\Apps\\SharedSuite\\ShellExtension.dll", companyName: null));
+
+        var result = resolver.Resolve(metadata);
+
+        var owner = Assert.IsType<ApplicationOwnerMetadata>(result.Owner);
+        Assert.Equal(ApplicationOwnerKind.Unknown, owner.Kind);
+        Assert.Equal(OwnershipConfidence.None, owner.Confidence);
+    }
+
     private static ApplicationOwnershipResolver CreateResolver(
         IReadOnlyList<InstalledApplicationInfo> applications,
         IReadOnlyList<InstalledPackageInfo> packages) =>
@@ -160,7 +244,10 @@ public sealed class ApplicationOwnershipResolverTests
             Issues: []);
     }
 
-    private static BinaryFileMetadata CreateBinary(string path, string? companyName) => new(
+    private static BinaryFileMetadata CreateBinary(
+        string path,
+        string? companyName,
+        string? productName = null) => new(
         path,
         Exists: true,
         Size: 1,
@@ -170,7 +257,7 @@ public sealed class ApplicationOwnershipResolverTests
         IsManaged: false,
         FileVersion: "1.0.0.0",
         ProductVersion: "1.0.0.0",
-        ProductName: null,
+        productName,
         Description: null,
         companyName,
         new AuthenticodeSignatureMetadata(

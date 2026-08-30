@@ -215,9 +215,22 @@ public partial class DiagnosticWorkbench : UserControl
             return;
         }
 
-        var message = $"卸载“{plan.Owner.DisplayName}”？\n\n" +
-                      $"{plan.ImpactDescription}\n\n" +
-                      "这会删除整个应用，而不只是右键菜单。注册备份不能重新安装应用。";
+        var method = plan.Method switch
+        {
+            ApplicationUninstallMethod.PackageCurrentUser => "移除当前用户的 MSIX/AppX 包",
+            ApplicationUninstallMethod.MsiProductCode => "启动 Windows Installer 卸载精确 ProductCode",
+            ApplicationUninstallMethod.VendorExecutable => "直接启动该应用登记的卸载程序",
+            _ => "启动应用卸载流程",
+        };
+        var elevation = plan.RequiresElevation
+            ? "此卸载步骤会请求管理员权限。\n"
+            : string.Empty;
+        var message = $"卸载整个“{plan.Owner.DisplayName}”？\n\n" +
+                      $"将执行：{method}。\n" +
+                      elevation +
+                      "确认后会先让你选择 .rmcbak 文件，并强制备份该应用当前匹配到的右键菜单注册；" +
+                      "只有备份成功才会启动卸载。\n\n" +
+                      "这不是删除当前右键菜单项，而是卸载整个应用。备份只能恢复注册信息，不能重新安装应用。";
         if (!Confirm(message, "确认卸载应用"))
         {
             return;

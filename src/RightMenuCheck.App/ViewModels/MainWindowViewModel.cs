@@ -330,8 +330,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 {
                     row.SetOperationError(exception.Message);
                 }
-
-                ItemsView.Refresh();
             }
 
             ProgressValue = rows.Length;

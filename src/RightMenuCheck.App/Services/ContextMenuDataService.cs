@@ -151,6 +151,7 @@ public sealed class ContextMenuDataService : IContextMenuDataService
             : result.Status == BenchmarkStatus.Failed
                 ? AppLogLevel.Error
                 : AppLogLevel.Information;
+        var failureReasons = BenchmarkFailureAnalyzer.Group(result);
         _logger.Log(
             level,
             eventName,
@@ -159,14 +160,24 @@ public sealed class ContextMenuDataService : IContextMenuDataService
             {
                 ["registrationId"] = result.Id,
                 ["status"] = result.Status.ToString(),
+                ["attemptedTrials"] = result.AttemptedTrials,
                 ["successfulTrials"] = result.SuccessfulTrials,
                 ["timeoutCount"] = result.TimeoutCount,
                 ["crashCount"] = result.CrashCount,
                 ["failureCount"] = result.FailureCount,
                 ["medianMilliseconds"] = result.HandlerDuration?.Median,
                 ["percentile95Milliseconds"] = result.HandlerDuration?.Percentile95,
+                ["failureReasons"] = failureReasons.Count == 0
+                    ? null
+                    : string.Join(" || ", failureReasons.Select(FormatFailureReasonForLog)),
             });
     }
+
+    private static string FormatFailureReasonForLog(BenchmarkFailureReason reason) =>
+        $"outcome={reason.Outcome};phase={reason.FailedPhase?.ToString() ?? "none"};" +
+        $"type={reason.ErrorType ?? "none"};" +
+        $"hresult={(reason.HResult is { } hResult ? $"0x{unchecked((uint)hResult):X8}" : "none")};" +
+        $"count={reason.Count};message={reason.ErrorMessage ?? "none"}";
 
     private static async Task<ContextMenuScanSnapshot> ScanCoreAsync(
         IProgress<ScanProgress>? progress,

@@ -1,5 +1,6 @@
 using RightMenuCheck.Core.Inventory;
 using RightMenuCheck.Core.Metadata;
+using RightMenuCheck.Probe.Protocol;
 using RightMenuCheck.Windows.Benchmark;
 
 namespace RightMenuCheck.App.ViewModels;
@@ -24,7 +25,26 @@ public sealed class ContextMenuRowViewModel : ObservableObject
 
     public string OwnerName => string.IsNullOrWhiteSpace(Metadata.Owner?.DisplayName)
         ? "未知应用"
-        : Metadata.Owner.DisplayName;
+        : Metadata.Owner switch
+        {
+            { Kind: ApplicationOwnerKind.Unknown, Confidence: OwnershipConfidence.None } => "未知应用",
+            { Kind: ApplicationOwnerKind.Unknown } owner => $"{owner.DisplayName}（文件线索）",
+            { Confidence: OwnershipConfidence.Low } owner => $"{owner.DisplayName}（低可信）",
+            { } owner => owner.DisplayName,
+            _ => "未知应用",
+        };
+
+    public string OwnerEvidence => Metadata.Owner is not { } owner
+        ? "未获得归属信息"
+        : $"{GetConfidenceText(owner.Confidence)} · {owner.MatchReason}";
+
+    public string BinaryProduct => Metadata.Components
+                                       .Select(static component => component.Binary?.ProductName)
+                                       .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ??
+                                   Metadata.Components
+                                       .Select(static component => component.Binary?.Description)
+                                       .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ??
+                                   "未提供";
 
     public string Publisher => Metadata.Owner?.Publisher ??
                                Metadata.Components
@@ -150,6 +170,14 @@ public sealed class ContextMenuRowViewModel : ObservableObject
 
     public string Limitation => _operationError ?? _benchmark?.Limitation ?? "无";
 
+    public string TrialSummary => _benchmark is null
+        ? "未测试"
+        : $"成功 {_benchmark.SuccessfulTrials}/{_benchmark.AttemptedTrials} · " +
+          $"超时 {_benchmark.TimeoutCount} · 崩溃 {_benchmark.CrashCount} · " +
+          $"其他失败 {_benchmark.FailureCount}";
+
+    public string BenchmarkFailureDetails => _operationError ?? FormatFailureDetails(_benchmark);
+
     public string SearchText => string.Join(
         ' ',
         DisplayName,
@@ -193,7 +221,11 @@ public sealed class ContextMenuRowViewModel : ObservableObject
         TimeoutCount,
         FailureCount,
         _benchmark?.FailureRate,
-        Limitation);
+        Limitation,
+        OwnerEvidence,
+        BinaryProduct,
+        TrialSummary,
+        BenchmarkFailureDetails);
 
     private void RaiseBenchmarkProperties()
     {
@@ -207,6 +239,8 @@ public sealed class ContextMenuRowViewModel : ObservableObject
         OnPropertyChanged(nameof(BenchmarkSortRank));
         OnPropertyChanged(nameof(MeasurementScope));
         OnPropertyChanged(nameof(Limitation));
+        OnPropertyChanged(nameof(TrialSummary));
+        OnPropertyChanged(nameof(BenchmarkFailureDetails));
     }
 
     private string GetFileTypeScope()
@@ -284,6 +318,84 @@ public sealed class ContextMenuRowViewModel : ObservableObject
 
     private static string FormatMilliseconds(double? value) =>
         value is null ? "—" : $"{value.Value:F2} ms";
+
+    private static string FormatFailureDetails(ContextMenuBenchmarkResult? benchmark)
+    {
+        if (benchmark is null)
+        {
+            return "未测试";
+        }
+
+        var reasons = BenchmarkFailureAnalyzer.Group(benchmark);
+        return reasons.Count == 0
+            ? "无"
+            : string.Join(Environment.NewLine, reasons.Select(FormatFailureReason));
+    }
+
+    private static string FormatFailureReason(BenchmarkFailureReason reason)
+    {
+        var parts = new List<string>
+        {
+            $"{GetOutcomeText(reason.Outcome)}（{reason.Count} 次）",
+        };
+        if (reason.FailedPhase is { } phase)
+        {
+            parts.Add($"阶段：{GetPhaseText(phase)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(reason.ErrorType))
+        {
+            parts.Add($"类型：{reason.ErrorType}");
+        }
+
+        if (reason.HResult is { } hResult)
+        {
+            parts.Add($"HRESULT 0x{unchecked((uint)hResult):X8}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(reason.ErrorMessage))
+        {
+            var message = reason.ErrorMessage.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            parts.Add(message.Length <= 280 ? message : $"{message[..280]}…");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private static string GetConfidenceText(OwnershipConfidence confidence) => confidence switch
+    {
+        OwnershipConfidence.Exact => "精确匹配",
+        OwnershipConfidence.High => "高可信",
+        OwnershipConfidence.Medium => "中可信",
+        OwnershipConfidence.Low => "仅作线索",
+        _ => "未确认",
+    };
+
+    private static string GetOutcomeText(ProbeOutcome outcome) => outcome switch
+    {
+        ProbeOutcome.NotApplicable => "样本不适用",
+        ProbeOutcome.InvalidRequest => "测试请求无效",
+        ProbeOutcome.ActivationFailed => "COM 激活失败",
+        ProbeOutcome.InitializationFailed => "Shell 初始化失败",
+        ProbeOutcome.QueryFailed => "菜单构建失败",
+        ProbeOutcome.TimedOut => "测试超时",
+        ProbeOutcome.Crashed => "扩展进程崩溃",
+        ProbeOutcome.ProtocolError => "测试通信错误",
+        _ => outcome.ToString(),
+    };
+
+    private static string GetPhaseText(ProbePhase phase) => phase switch
+    {
+        ProbePhase.ComActivation => "COM 激活",
+        ProbePhase.ShellInitialization => "Shell 初始化",
+        ProbePhase.MenuConstruction => "菜单构建",
+        ProbePhase.GetTitle => "读取标题",
+        ProbePhase.GetIcon => "读取图标",
+        ProbePhase.GetState => "读取状态",
+        ProbePhase.EnumerateSubCommands => "枚举子命令",
+        ProbePhase.AggregateMenuCreation => "整体菜单构建",
+        _ => phase.ToString(),
+    };
 }
 
 public sealed record ContextMenuExportRow(
@@ -305,4 +417,8 @@ public sealed record ContextMenuExportRow(
     int TimeoutCount,
     int FailureCount,
     double? FailureRate,
-    string Limitation);
+    string Limitation,
+    string OwnerEvidence,
+    string BinaryProduct,
+    string TrialSummary,
+    string FailureDetails);

@@ -15,7 +15,7 @@ public enum BenchmarkStatus
 public sealed record BenchmarkOptions(int TrialCount, TimeSpan Timeout)
 {
     public static BenchmarkOptions Default { get; } = new(
-        TrialCount: 7,
+        TrialCount: 3,
         Timeout: TimeSpan.FromSeconds(5));
 }
 
@@ -55,6 +55,56 @@ public sealed record ContextMenuBenchmarkResult(
     public double? FailureRate => AttemptedTrials == 0
         ? null
         : (AttemptedTrials - SuccessfulTrials) / (double)AttemptedTrials;
+}
+
+public sealed record BenchmarkFailureReason(
+    ProbeOutcome Outcome,
+    ProbePhase? FailedPhase,
+    string? ErrorType,
+    string? ErrorMessage,
+    int? HResult,
+    int Count);
+
+public static class BenchmarkFailureAnalyzer
+{
+    public static IReadOnlyList<BenchmarkFailureReason> Group(
+        ContextMenuBenchmarkResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return result.Trials
+            .Where(static trial => trial.Outcome != ProbeOutcome.Success)
+            .Select(static trial =>
+            {
+                var failedPhase = trial.Phases.LastOrDefault(static phase => !phase.Succeeded);
+                return new FailureKey(
+                    trial.Outcome,
+                    failedPhase?.Phase,
+                    trial.Error?.Type,
+                    trial.Error?.Message,
+                    trial.Error?.HResult ?? failedPhase?.HResult);
+            })
+            .GroupBy(static failure => failure)
+            .Select(static group => new BenchmarkFailureReason(
+                group.Key.Outcome,
+                group.Key.FailedPhase,
+                group.Key.ErrorType,
+                group.Key.ErrorMessage,
+                group.Key.HResult,
+                group.Count()))
+            .OrderByDescending(static reason => reason.Count)
+            .ThenBy(static reason => reason.Outcome)
+            .ThenBy(static reason => reason.FailedPhase)
+            .ThenBy(static reason => reason.ErrorType, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private sealed record FailureKey(
+        ProbeOutcome Outcome,
+        ProbePhase? FailedPhase,
+        string? ErrorType,
+        string? ErrorMessage,
+        int? HResult);
 }
 
 public sealed class ContextMenuBenchmarkComparer : IComparer<ContextMenuBenchmarkResult>

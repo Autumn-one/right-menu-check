@@ -12,6 +12,12 @@ public sealed class ContextMenuBenchmarkRunnerTests
     private const string HandlerClsid = "{11111111-2222-3333-4444-555555555555}";
 
     [Fact]
+    public void DefaultOptionsUseThreeTrials()
+    {
+        Assert.Equal(3, BenchmarkOptions.Default.TrialCount);
+    }
+
+    [Fact]
     public async Task RunCalculatesMedianNearestRankP95AndPhaseStatistics()
     {
         var client = new FakeProbeClient(
@@ -64,6 +70,33 @@ public sealed class ContextMenuBenchmarkRunnerTests
         Assert.Equal(2d / 3d, result.FailureRate);
         Assert.NotNull(result.HandlerDuration);
         Assert.Equal(2, result.HandlerDuration.Median);
+    }
+
+    [Fact]
+    public async Task FailureAnalysisGroupsOutcomePhaseErrorAndHResult()
+    {
+        var client = new FakeProbeClient(
+            CreateQueryFailure(),
+            CreateQueryFailure(),
+            CreateFailure(ProbeOutcome.TimedOut));
+        var runner = CreateRunner(client);
+
+        var result = await runner.RunAsync(
+            CreateMetadata(ContextMenuRegistrationKind.ClassicContextMenuHandler),
+            new BenchmarkTarget(ProbeTargetKind.File, "C:\\Samples\\file.txt"),
+            new BenchmarkOptions(3, TimeSpan.FromSeconds(1)),
+            CancellationToken.None);
+
+        var reasons = BenchmarkFailureAnalyzer.Group(result);
+
+        Assert.Equal(2, reasons.Count);
+        var queryFailure = Assert.Single(
+            reasons,
+            reason => reason.Outcome == ProbeOutcome.QueryFailed);
+        Assert.Equal(2, queryFailure.Count);
+        Assert.Equal(ProbePhase.MenuConstruction, queryFailure.FailedPhase);
+        Assert.Equal("QueryContextMenu", queryFailure.ErrorType);
+        Assert.Equal(unchecked((int)0x80004005), queryFailure.HResult);
     }
 
     [Theory]
@@ -197,6 +230,28 @@ public sealed class ContextMenuBenchmarkRunnerTests
         TotalDurationMilliseconds: 100,
         Phases: [],
         new ProbeError(outcome.ToString(), "Failure fixture", HResult: null));
+
+    private static ProbeResponse CreateQueryFailure() => new(
+        ProbeProtocol.CurrentVersion,
+        Guid.NewGuid(),
+        "nonce",
+        ProbeOutcome.QueryFailed,
+        WorkerProcessId: 1,
+        WorkerArchitecture: "X64",
+        DateTimeOffset.UtcNow,
+        TotalDurationMilliseconds: 10,
+        Phases:
+        [
+            new ProbePhaseTiming(
+                ProbePhase.MenuConstruction,
+                DurationMilliseconds: 5,
+                HResult: unchecked((int)0x80004005),
+                Succeeded: false),
+        ],
+        new ProbeError(
+            "QueryContextMenu",
+            "The handler rejected the sample.",
+            unchecked((int)0x80004005)));
 
     private static ContextMenuBenchmarkResult CreateResult(
         string id,
