@@ -91,6 +91,36 @@ public sealed class ProbeWorkerClientTests
             phase => phase.Phase == ProbePhase.MenuConstruction);
     }
 
+    [Theory]
+    [InlineData("release_win-x64", "X64")]
+    [InlineData("release_win-x86", "X86")]
+    public async Task PublishedWorkerRunsWithExpectedProcessArchitecture(
+        string publishConfiguration,
+        string expectedArchitecture)
+    {
+        var workerPath = GetPublishedExecutable(publishConfiguration);
+        if (!File.Exists(workerPath))
+        {
+            return;
+        }
+
+        var client = new ProbeWorkerClient();
+        var invocation = new ProbeInvocation(
+            ProbeOperation.ClassicContextMenu,
+            ProbeTargetKind.File,
+            "{11111111-2222-3333-4444-555555555555}",
+            Path.Combine(Environment.SystemDirectory, "kernel32.dll"),
+            "*");
+
+        var response = await client.RunAsync(
+            invocation,
+            new ProbeWorkerOptions(workerPath, TimeSpan.FromSeconds(5)),
+            CancellationToken.None);
+
+        Assert.Equal(ProbeOutcome.ActivationFailed, response.Outcome);
+        Assert.Equal(expectedArchitecture, response.WorkerArchitecture, ignoreCase: true);
+    }
+
     [Fact]
     public async Task RunKillsWorkerJobWhenHandshakeTimesOut()
     {
@@ -140,5 +170,18 @@ public sealed class ProbeWorkerClientTests
             projectName,
             "debug",
             $"{projectName}.exe");
+    }
+
+    private static string GetPublishedExecutable(string publishConfiguration)
+    {
+        var testOutput = new DirectoryInfo(AppContext.BaseDirectory);
+        var artifactsRoot = testOutput.Parent?.Parent?.Parent ??
+                            throw new DirectoryNotFoundException("The shared artifacts directory was not found.");
+        return Path.Combine(
+            artifactsRoot.FullName,
+            "publish",
+            "RightMenuCheck.Probe.Worker",
+            publishConfiguration,
+            "RightMenuCheck.Probe.Worker.exe");
     }
 }
