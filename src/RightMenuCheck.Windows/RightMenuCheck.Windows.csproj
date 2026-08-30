@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RightMenuCheck.Core\RightMenuCheck.Core.csproj" />
+    <ProjectReference Include="..\RightMenuCheck.Probe.Protocol\RightMenuCheck.Probe.Protocol.csproj" />
   </ItemGroup>
 
 </Project>
