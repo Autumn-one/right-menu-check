@@ -29,6 +29,8 @@
     <ProjectReference Include="..\..\src\RightMenuCheck.Windows\RightMenuCheck.Windows.csproj" />
     <ProjectReference Include="..\RightMenuCheck.Probe.FaultWorker\RightMenuCheck.Probe.FaultWorker.csproj"
                       ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\RightMenuCheck.Uninstall.Fixture\RightMenuCheck.Uninstall.Fixture.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
