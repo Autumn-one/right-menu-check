@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -6,7 +6,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\RightMenuCheck.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\RightMenuCheck.ico" />
+    <Resource Include="Assets\RightMenuCheck.png" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\RightMenuCheck.Core\RightMenuCheck.Core.csproj" />

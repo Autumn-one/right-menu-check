@@ -29,14 +29,29 @@
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-          <TextBlock Text="RightMenuCheck"
-                     FontSize="17"
-                     FontWeight="SemiBold" />
-          <TextBlock Text="右键菜单诊断"
-                     FontSize="11"
-                     Foreground="{StaticResource TextSecondaryBrush}" />
-        </StackPanel>
+        <Grid Grid.Column="0" VerticalAlignment="Center">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="34" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Image Width="34"
+                 Height="34"
+                 Source="/RightMenuCheck.App;component/Assets/RightMenuCheck.png"
+                 Stretch="Uniform"
+                 SnapsToDevicePixels="True"
+                 RenderOptions.BitmapScalingMode="HighQuality"
+                 AutomationProperties.Name="RightMenuCheck 标志" />
+          <StackPanel Grid.Column="1"
+                      Margin="10,0,0,0"
+                      VerticalAlignment="Center">
+            <TextBlock Text="RightMenuCheck"
+                       FontSize="17"
+                       FontWeight="SemiBold" />
+            <TextBlock Text="右键菜单诊断"
+                       FontSize="11"
+                       Foreground="{StaticResource TextSecondaryBrush}" />
+          </StackPanel>
+        </Grid>
 
         <StackPanel Grid.Column="1"
                     Orientation="Horizontal"

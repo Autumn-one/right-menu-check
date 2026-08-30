@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1024"
+     height="1024"
+     viewBox="0 0 1024 1024"
+     fill="none">
+  <title>RightMenuCheck application mark</title>
+  <desc>A context menu with a diagnostic pulse and mouse pointer.</desc>
+
+  <rect x="80" y="80" width="864" height="864" rx="204" fill="#17212B" />
+  <rect x="80" y="64" width="848" height="848" rx="196" fill="#087E8B" />
+
+  <rect x="194" y="174" width="516" height="620" rx="76" fill="#FFFFFF" />
+  <rect x="194" y="718" width="516" height="76" rx="38" fill="#E7F3F2" />
+
+  <circle cx="282" cy="306" r="22" fill="#F4B942" />
+  <rect x="340" y="286" width="280" height="40" rx="20" fill="#17212B" />
+
+  <circle cx="282" cy="424" r="22" fill="#F4B942" />
+  <rect x="340" y="404" width="228" height="40" rx="20" fill="#17212B" />
+
+  <circle cx="282" cy="542" r="22" fill="#F4B942" />
+  <rect x="340" y="522" width="260" height="40" rx="20" fill="#17212B" />
+
+  <path d="M268 680H344L384 628L432 704L474 654H622"
+        stroke="#087E8B"
+        stroke-width="30"
+        stroke-linecap="round"
+        stroke-linejoin="round" />
+
+  <path d="M542 492V846L638 754L708 894L798 848L728 714L858 704L542 492Z"
+        fill="#17212B"
+        stroke="#FFFFFF"
+        stroke-width="30"
+        stroke-linejoin="round" />
+  <circle cx="542" cy="492" r="18" fill="#F4B942" />
+</svg>

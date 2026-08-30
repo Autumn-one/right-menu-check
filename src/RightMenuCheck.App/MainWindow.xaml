@@ -1,4 +1,4 @@
-﻿<Window x:Class="RightMenuCheck.App.MainWindow"
+<Window x:Class="RightMenuCheck.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -6,6 +6,7 @@
         xmlns:views="clr-namespace:RightMenuCheck.App.Views"
         mc:Ignorable="d"
         Title="RightMenuCheck · 右键菜单诊断"
+        Icon="Assets/RightMenuCheck.ico"
         Width="1440"
         Height="860"
         MinWidth="1100"
