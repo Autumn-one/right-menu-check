@@ -30,7 +30,8 @@ public static class ProbeRequestValidator
             return Invalid("Nonce validation failed.");
         }
 
-        if (!Guid.TryParse(request.HandlerClsid, out _))
+        if (request.Operation != ProbeOperation.AggregatedContextMenu &&
+            !Guid.TryParse(request.HandlerClsid, out _))
         {
             return Invalid("HandlerClsid is not a valid GUID.");
         }

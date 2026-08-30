@@ -28,6 +28,10 @@ internal static class ShellProbeExecutor
                     request,
                     startedAt,
                     totalStopwatch),
+                ProbeOperation.AggregatedContextMenu => ExecuteAggregate(
+                    request,
+                    startedAt,
+                    totalStopwatch),
                 _ => CreateFailure(
                     request,
                     startedAt,
@@ -292,6 +296,111 @@ internal static class ShellProbeExecutor
         finally
         {
             ShellTargetContext.ReleaseComObject(command);
+        }
+    }
+
+    private static ProbeResponse ExecuteAggregate(
+        ProbeRequest request,
+        DateTimeOffset startedAt,
+        Stopwatch totalStopwatch)
+    {
+        using var target = DefaultContextMenuTarget.Create(request);
+        var phases = new List<ProbePhaseTiming>();
+        IContextMenu? contextMenu = null;
+
+        try
+        {
+            var creation = Measure(() => CreateDefaultContextMenu(target, out contextMenu));
+            phases.Add(CreatePhase(ProbePhase.AggregateMenuCreation, creation));
+            if (creation.HResult < 0 || contextMenu is null)
+            {
+                return CreateHResultFailure(
+                    request,
+                    startedAt,
+                    totalStopwatch.Elapsed,
+                    ProbeOutcome.InitializationFailed,
+                    phases,
+                    "SHCreateDefaultContextMenu",
+                    creation.HResult);
+            }
+
+            var menu = ShellInterop.CreatePopupMenu();
+            if (menu == IntPtr.Zero)
+            {
+                return CreateHResultFailure(
+                    request,
+                    startedAt,
+                    totalStopwatch.Elapsed,
+                    ProbeOutcome.QueryFailed,
+                    phases,
+                    "CreatePopupMenu",
+                    Marshal.GetHRForLastWin32Error());
+            }
+
+            try
+            {
+                var construction = Measure(() => contextMenu.QueryContextMenu(
+                    menu,
+                    indexMenu: 0,
+                    firstCommandId: 1,
+                    lastCommandId: 0x7FFF,
+                    flags: 0));
+                phases.Add(CreatePhase(ProbePhase.MenuConstruction, construction));
+                if (construction.HResult < 0)
+                {
+                    return CreateHResultFailure(
+                        request,
+                        startedAt,
+                        totalStopwatch.Elapsed,
+                        ProbeOutcome.QueryFailed,
+                        phases,
+                        "IContextMenu.QueryContextMenu",
+                        construction.HResult);
+                }
+            }
+            finally
+            {
+                _ = ShellInterop.DestroyMenu(menu);
+            }
+
+            totalStopwatch.Stop();
+            return CreateSuccess(request, startedAt, totalStopwatch.Elapsed, phases);
+        }
+        finally
+        {
+            ShellTargetContext.ReleaseComObject(contextMenu);
+        }
+    }
+
+    private static int CreateDefaultContextMenu(
+        DefaultContextMenuTarget target,
+        out IContextMenu? contextMenu)
+    {
+        contextMenu = null;
+        var definition = new ShellInterop.DefaultContextMenu
+        {
+            FolderItemIdList = target.FolderItemIdList,
+            ChildCount = target.ChildCount,
+            ChildItemIdLists = target.ChildItemIdLists,
+        };
+        var interfaceId = typeof(IContextMenu).GUID;
+        var result = ShellInterop.SHCreateDefaultContextMenu(
+            ref definition,
+            ref interfaceId,
+            out var contextMenuPointer);
+        if (result < 0)
+        {
+            return result;
+        }
+
+        try
+        {
+            contextMenu = (IContextMenu)Marshal.GetObjectForIUnknown(contextMenuPointer);
+            return 0;
+        }
+        finally
+        {
+            _ = Marshal.Release(contextMenuPointer);
         }
     }
 

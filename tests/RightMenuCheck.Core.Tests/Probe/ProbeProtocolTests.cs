@@ -48,6 +48,20 @@ public sealed class ProbeProtocolTests
         Assert.Null(result.Error);
     }
 
+    [Fact]
+    public void ValidateAllowsAggregateRequestWithoutHandlerClsid()
+    {
+        var request = CreateRequest() with
+        {
+            Operation = ProbeOperation.AggregatedContextMenu,
+            HandlerClsid = string.Empty,
+        };
+
+        var result = ProbeRequestValidator.Validate(request, request.Nonce);
+
+        Assert.True(result.IsValid);
+    }
+
     [Theory]
     [InlineData("version")]
     [InlineData("request-id")]

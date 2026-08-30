@@ -68,12 +68,32 @@ internal static partial class ShellInterop
         ref Guid interfaceId,
         out IntPtr shellItemArray);
 
+    [LibraryImport("shell32.dll")]
+    public static partial int SHCreateDefaultContextMenu(
+        ref DefaultContextMenu definition,
+        ref Guid interfaceId,
+        out IntPtr contextMenu);
+
     [LibraryImport("user32.dll", SetLastError = true)]
     public static partial IntPtr CreatePopupMenu();
 
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool DestroyMenu(IntPtr menu);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct DefaultContextMenu
+    {
+        public IntPtr Window;
+        public IntPtr Callback;
+        public IntPtr FolderItemIdList;
+        public IntPtr ShellFolder;
+        public uint ChildCount;
+        public IntPtr ChildItemIdLists;
+        public IntPtr AssociationInfo;
+        public uint KeyCount;
+        public IntPtr Keys;
+    }
 }
 
 [ComImport]

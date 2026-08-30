@@ -91,6 +91,29 @@ public sealed class ProbeWorkerClientTests
             phase => phase.Phase == ProbePhase.MenuConstruction);
     }
 
+    [Fact]
+    public async Task RunMeasuresAggregatedShellMenuInIsolatedWorker()
+    {
+        var client = new ProbeWorkerClient();
+        var invocation = new ProbeInvocation(
+            ProbeOperation.AggregatedContextMenu,
+            ProbeTargetKind.File,
+            HandlerClsid: string.Empty,
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "win.ini"),
+            "*");
+
+        var response = await client.RunAsync(
+            invocation,
+            CreateWorkerOptions(TimeSpan.FromSeconds(15)),
+            CancellationToken.None);
+
+        Assert.True(
+            response.Outcome == ProbeOutcome.Success,
+            $"Expected Success but received {response.Outcome}: {response.Error}");
+        Assert.Contains(response.Phases, phase => phase.Phase == ProbePhase.AggregateMenuCreation);
+        Assert.Contains(response.Phases, phase => phase.Phase == ProbePhase.MenuConstruction);
+    }
+
     [Theory]
     [InlineData("release_win-x64", "X64")]
     [InlineData("release_win-x86", "X86")]

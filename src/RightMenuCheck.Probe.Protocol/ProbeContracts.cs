@@ -11,6 +11,7 @@ public enum ProbeOperation
 {
     ClassicContextMenu,
     ExplorerCommand,
+    AggregatedContextMenu,
 }
 
 public enum ProbeTargetKind
@@ -44,6 +45,7 @@ public enum ProbePhase
     GetIcon,
     GetState,
     EnumerateSubCommands,
+    AggregateMenuCreation,
 }
 
 public sealed record ProbeRequest(
