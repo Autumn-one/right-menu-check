@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "payload": {
+    "sequence": 2,
+    "issuedAtUtc": "2026-08-30T23:20:45.5775019+00:00",
+    "expiresAtUtc": "2027-08-30T23:20:45.5775019+00:00",
+    "version": "0.0.0",
+    "package": {
+      "assetName": "channel-idle.zip",
+      "sizeBytes": 1,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "primaryUrl": "https://github.com/Autumn-one/right-menu-check/releases/download/channel-idle/channel-idle.zip",
+      "mirrorUrls": [
+        "https://ghfast.top/https://github.com/Autumn-one/right-menu-check/releases/download/channel-idle/channel-idle.zip",
+        "https://gh-proxy.com/https://github.com/Autumn-one/right-menu-check/releases/download/channel-idle/channel-idle.zip"
+      ]
+    },
+    "releaseNotes": "Update channel is idle after disposable end-to-end verification.",
+    "releasePageUrl": "https://github.com/Autumn-one/right-menu-check"
+  },
+  "signatureAlgorithm": "ECDSA_P256_SHA256",
+  "signature": "MEYCIQDnAaQuY2IBXGFh1O1hxBEEoaEZ5ifdFry7SSAA40dS0wIhAK0SDYr7eSUPxawsOt5jjzYPFL9i8VfYFlzqKM\u002BnD1hM"
+}
