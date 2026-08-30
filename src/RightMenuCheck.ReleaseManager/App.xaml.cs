@@ -28,14 +28,22 @@ public partial class App : Application, IDisposable
                 _httpClient,
                 configuration.Repository,
                 configuration.AccessToken);
+            var publicKeyPath = Path.Combine(
+                repositoryRoot,
+                "distribution",
+                "update-public-key.pem");
             var keyProvider = new FileDistributionSigningKeyProvider(
                 configuration.SigningPrivateKeyPath,
-                Path.Combine(repositoryRoot, "distribution", "update-public-key.pem"));
+                publicKeyPath);
             _ = keyProvider.ReadPrivateKey();
+            var publicKey = File.ReadAllText(publicKeyPath);
             _viewModel = new ReleaseManagerViewModel(
                 configuration,
                 github,
-                new ReleaseAdministrationService(github),
+                new ReleaseAdministrationService(
+                    github,
+                    configuration.DefaultBranch,
+                    publicKey),
                 new ReleasePublishingService(
                     repositoryRoot,
                     configuration,

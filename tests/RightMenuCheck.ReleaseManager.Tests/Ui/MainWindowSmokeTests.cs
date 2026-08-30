@@ -32,7 +32,7 @@ public sealed class MainWindowSmokeTests
                 using var viewModel = new ReleaseManagerViewModel(
                     configuration,
                     github,
-                    new ReleaseAdministrationService(github),
+                    new ReleaseAdministrationService(github, "main", "unused-test-public-key"),
                     new ReleasePublishingService(
                         Path.GetTempPath(),
                         configuration,

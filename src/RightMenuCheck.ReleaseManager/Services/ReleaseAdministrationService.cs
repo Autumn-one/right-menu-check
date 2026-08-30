@@ -1,4 +1,8 @@
+using System.Text;
+using System.Text.Json;
+using RightMenuCheck.Distribution;
 using RightMenuCheck.ReleaseManager.GitHub;
+using RightMenuCheck.ReleaseManager.Publishing;
 
 namespace RightMenuCheck.ReleaseManager.Services;
 
@@ -40,10 +44,19 @@ public sealed record ReleaseDeletionResult(
 public sealed class ReleaseAdministrationService
 {
     private readonly IGitHubRepositoryClient _client;
+    private readonly string _defaultBranch;
+    private readonly string _publicKeyPem;
 
-    public ReleaseAdministrationService(IGitHubRepositoryClient client)
+    public ReleaseAdministrationService(
+        IGitHubRepositoryClient client,
+        string defaultBranch,
+        string publicKeyPem)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
+        ArgumentException.ThrowIfNullOrWhiteSpace(defaultBranch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicKeyPem);
+        _defaultBranch = defaultBranch.Trim();
+        _publicKeyPem = publicKeyPem;
     }
 
     public static ReleaseDeletionImpact PreviewDeletion(
@@ -70,6 +83,9 @@ public sealed class ReleaseAdministrationService
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(confirmedImpact.ReleaseId);
 
         var exactTag = GitReferenceValidator.ValidateTag(confirmedImpact.ExactTag);
+        await EnsureReleaseIsNotCurrentAsync(
+            exactTag,
+            cancellationToken).ConfigureAwait(false);
         await _client.DeleteReleaseAsync(
             confirmedImpact.ReleaseId,
             cancellationToken).ConfigureAwait(false);
@@ -88,5 +104,46 @@ public sealed class ReleaseAdministrationService
             exactTag,
             ReleaseDeleted: true,
             TagDeleted: true);
+    }
+
+    private async Task EnsureReleaseIsNotCurrentAsync(
+        string exactTag,
+        CancellationToken cancellationToken)
+    {
+        var file = await _client.GetFileAsync(
+            ReleasePublishingService.UpdateManifestPath,
+            _defaultBranch,
+            cancellationToken).ConfigureAwait(false);
+        if (file is null)
+        {
+            return;
+        }
+
+        SignedUpdateManifest manifest;
+        try
+        {
+            manifest = DistributionJson.Deserialize<SignedUpdateManifest>(
+                Encoding.UTF8.GetString(file.Content));
+        }
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        {
+            throw new InvalidDataException(
+                "远程更新清单格式无效，无法安全判断该版本是否仍在使用。",
+                exception);
+        }
+
+        if (!manifest.HasValidSignature(_publicKeyPem) ||
+            !SemanticVersion.TryParse(manifest.Payload.Version, out var activeVersion))
+        {
+            throw new InvalidDataException(
+                "远程更新清单签名或版本无效，无法安全删除发布版本。");
+        }
+
+        var activeTag = $"v{activeVersion}";
+        if (exactTag.Equals(activeTag, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"{exactTag} 仍由当前更新清单引用。请先发布更高版本，再删除这个历史版本。");
+        }
     }
 }
