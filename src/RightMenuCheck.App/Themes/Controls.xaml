@@ -27,6 +27,7 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -35,17 +36,31 @@
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
                   CornerRadius="4">
-            <ContentPresenter HorizontalAlignment="Center"
-                              VerticalAlignment="Center"
-                              Margin="{TemplateBinding Padding}" />
+            <Grid>
+              <Border x:Name="InteractionOverlay"
+                      Background="Transparent"
+                      CornerRadius="3"
+                      IsHitTestVisible="False" />
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Margin="{TemplateBinding Padding}" />
+            </Grid>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="ButtonBorder" Property="Background" Value="#EEF3F4" />
-              <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#AAB8BF" />
+              <Setter TargetName="InteractionOverlay"
+                      Property="Background"
+                      Value="#10000000" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="ButtonBorder" Property="Background" Value="#E2EAEC" />
+              <Setter TargetName="InteractionOverlay"
+                      Property="Background"
+                      Value="#1F000000" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="ButtonBorder"
+                      Property="BorderBrush"
+                      Value="{StaticResource ControlFocusBrush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Opacity" Value="0.45" />
@@ -232,7 +247,7 @@
               </ToggleButton.Template>
             </ToggleButton>
 
-            <Popup x:Name="DropDownPopup"
+            <Popup x:Name="PART_Popup"
                    AllowsTransparency="True"
                    Focusable="False"
                    IsOpen="{TemplateBinding IsDropDownOpen}"
@@ -385,6 +400,28 @@
     </Setter>
   </Style>
 
+  <Style TargetType="ProgressBar">
+    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="#DCE4E6" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ProgressBar">
+          <Border x:Name="PART_Track"
+                  Background="{TemplateBinding Background}"
+                  CornerRadius="2"
+                  SnapsToDevicePixels="True">
+            <Border x:Name="PART_Indicator"
+                    HorizontalAlignment="Left"
+                    Background="{TemplateBinding Foreground}"
+                    CornerRadius="2" />
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <Style x:Key="ScrollTrackButtonStyle" TargetType="RepeatButton">
     <Setter Property="Focusable" Value="False" />
     <Setter Property="IsTabStop" Value="False" />
@@ -457,6 +494,10 @@
           <Grid Background="{TemplateBinding Background}">
             <Track x:Name="PART_Track"
                    IsDirectionReversed="True"
+                   Minimum="{TemplateBinding Minimum}"
+                   Maximum="{TemplateBinding Maximum}"
+                   Value="{TemplateBinding Value}"
+                   ViewportSize="{TemplateBinding ViewportSize}"
                    Orientation="{TemplateBinding Orientation}">
               <Track.DecreaseRepeatButton>
                 <RepeatButton x:Name="DecreaseButton"
@@ -500,6 +541,60 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+  </Style>
+
+  <Style TargetType="DataGrid">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="RowHeaderWidth" Value="0" />
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+  </Style>
+
+  <Style TargetType="DataGridColumnHeader">
+    <Setter Property="Background" Value="#F4F7F8" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="BorderBrush" Value="#E1E7E9" />
+    <Setter Property="BorderThickness" Value="0,0,1,1" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{StaticResource ControlHoverBrush}" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style TargetType="DataGridRow">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#F1F7F7" />
+      </Trigger>
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Opacity" Value="0.5" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style TargetType="DataGridCell">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Style.Triggers>
+      <Trigger Property="IsKeyboardFocusWithin" Value="True">
+        <Setter Property="Background" Value="#EDF7F6" />
+      </Trigger>
+    </Style.Triggers>
   </Style>
 
   <Style x:Key="CellTextStyle" TargetType="TextBlock">

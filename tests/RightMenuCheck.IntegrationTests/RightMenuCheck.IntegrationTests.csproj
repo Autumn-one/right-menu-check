@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,12 +16,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="System.IO" />
     <Using Include="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\RightMenuCheck.App\RightMenuCheck.App.csproj" />
     <ProjectReference Include="..\..\src\RightMenuCheck.Core\RightMenuCheck.Core.csproj" />
+    <ProjectReference Include="..\..\src\RightMenuCheck.Distribution\RightMenuCheck.Distribution.csproj" />
     <ProjectReference Include="..\..\src\RightMenuCheck.Probe.Protocol\RightMenuCheck.Probe.Protocol.csproj" />
     <ProjectReference Include="..\..\src\RightMenuCheck.Probe.Worker\RightMenuCheck.Probe.Worker.csproj"
                       ReferenceOutputAssembly="false" />
