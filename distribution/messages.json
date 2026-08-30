@@ -1,23 +1,11 @@
 {
   "schemaVersion": 2,
   "payload": {
-    "sequence": 2,
-    "issuedAtUtc": "2026-08-30T23:00:11.9287457+00:00",
-    "expiresAtUtc": "2027-08-30T23:00:11.9287457+00:00",
-    "messages": [
-      {
-        "id": "e2e-20260831-001",
-        "revision": 2,
-        "title": "RightMenuCheck \u66F4\u65B0\u9A8C\u8BC1",
-        "body": "\u7AEF\u5230\u7AEF\u9A8C\u8BC1\u516C\u544A\u5DF2\u53D1\u5E03\u4FEE\u8BA2 2\uFF1B\u672C\u6B21\u7528\u4E8E\u786E\u8BA4\u5BA2\u6237\u7AEF\u53EA\u5C55\u793A\u66F4\u9AD8 revision\u3002",
-        "kind": "information",
-        "startsAtUtc": "2026-08-30T22:48:14+00:00",
-        "endsAtUtc": null,
-        "minimumVersion": null,
-        "maximumVersion": null
-      }
-    ]
+    "sequence": 3,
+    "issuedAtUtc": "2026-08-30T23:04:32.3269873+00:00",
+    "expiresAtUtc": "2027-08-30T23:04:32.3269873+00:00",
+    "messages": []
   },
   "signatureAlgorithm": "ECDSA_P256_SHA256",
-  "signature": "MEYCIQCbSq/e86qO1vWipJHWzzC16RowA79XRVssoJ56u/A5ZwIhALU8YJ5MK/lOfqVFzkKPWv9f0yYqcOSgsKYe1m8A71tU"
+  "signature": "MEQCIGUEoTpry9QJc9u6JA1gahPkFITkPunoYPdStubVSkJLAiAXTlTwxsk/wAgtgYCwwrhovKfVDx2XL2jtb09ZP4y\u002BOw=="
 }
