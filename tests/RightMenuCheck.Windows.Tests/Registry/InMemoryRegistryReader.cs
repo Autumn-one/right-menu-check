@@ -16,6 +16,12 @@ internal sealed class InMemoryRegistryReader : IRegistryReader
 
     public IReadOnlyList<RegistryViewKind> AvailableViews { get; }
 
+    public bool KeyExists(
+        RegistryHiveKind hive,
+        RegistryViewKind view,
+        string keyPath) =>
+        TryGetNode(hive, view, keyPath, out _);
+
     public void AddKey(RegistryHiveKind hive, RegistryViewKind view, string keyPath)
     {
         var parts = NormalizePath(keyPath).Split('\\', StringSplitOptions.RemoveEmptyEntries);

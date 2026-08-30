@@ -268,6 +268,14 @@ Generated_Code/
 # because we have git ;-)
 _UpgradeReport_Files/
 Backup*/
+!src/RightMenuCheck.Core/Backup/
+!src/RightMenuCheck.Core/Backup/**
+!src/RightMenuCheck.Windows/Backup/
+!src/RightMenuCheck.Windows/Backup/**
+!tests/RightMenuCheck.Windows.Tests/Backup/
+!tests/RightMenuCheck.Windows.Tests/Backup/**
+!tests/RightMenuCheck.IntegrationTests/Backup/
+!tests/RightMenuCheck.IntegrationTests/Backup/**
 UpgradeLog*.XML
 UpgradeLog*.htm
 ServiceFabricBackup/

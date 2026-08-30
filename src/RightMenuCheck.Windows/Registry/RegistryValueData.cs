@@ -20,6 +20,11 @@ public interface IRegistryReader
 {
     IReadOnlyList<RegistryViewKind> AvailableViews { get; }
 
+    bool KeyExists(
+        RegistryHiveKind hive,
+        RegistryViewKind view,
+        string keyPath);
+
     IReadOnlyList<string> GetSubKeyNames(
         RegistryHiveKind hive,
         RegistryViewKind view,

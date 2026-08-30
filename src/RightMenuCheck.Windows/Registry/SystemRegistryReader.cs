@@ -14,6 +14,16 @@ public sealed class SystemRegistryReader : IRegistryReader
     public IReadOnlyList<RegistryViewKind> AvailableViews =>
         Environment.Is64BitOperatingSystem ? Views64Bit : Views32Bit;
 
+    public bool KeyExists(
+        RegistryHiveKind hive,
+        RegistryViewKind view,
+        string keyPath)
+    {
+        using var baseKey = OpenBaseKey(hive, view);
+        using var key = baseKey.OpenSubKey(NormalizeKeyPath(keyPath), writable: false);
+        return key is not null;
+    }
+
     public IReadOnlyList<string> GetSubKeyNames(
         RegistryHiveKind hive,
         RegistryViewKind view,
