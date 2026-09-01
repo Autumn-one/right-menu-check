@@ -18,13 +18,22 @@ public sealed record ApplicationUpdateCheck(
     UpdateDecision? Decision,
     string Message);
 
+public sealed record PreparedApplicationUpdate(
+    SignedUpdateManifest Manifest,
+    SemanticVersion TargetVersion,
+    string PackagePath);
+
 public interface IApplicationUpdateService
 {
     Task<ApplicationUpdateCheck> CheckAsync(CancellationToken cancellationToken);
 
-    Task PrepareAndLaunchAsync(
+    Task<PreparedApplicationUpdate> PrepareAsync(
         SignedUpdateManifest manifest,
         IProgress<double>? progress,
+        CancellationToken cancellationToken);
+
+    Task LaunchPreparedAsync(
+        PreparedApplicationUpdate update,
         CancellationToken cancellationToken);
 }
 
@@ -97,7 +106,7 @@ public sealed class ApplicationUpdateService : IApplicationUpdateService
         return new ApplicationUpdateCheck(state, manifest, decision, decision.Reason);
     }
 
-    public async Task PrepareAndLaunchAsync(
+    public async Task<PreparedApplicationUpdate> PrepareAsync(
         SignedUpdateManifest manifest,
         IProgress<double>? progress,
         CancellationToken cancellationToken)
@@ -122,12 +131,42 @@ public sealed class ApplicationUpdateService : IApplicationUpdateService
                 progress,
                 cancellationToken)
             .ConfigureAwait(false);
+        return new PreparedApplicationUpdate(
+            manifest,
+            decision.TargetVersion.Value,
+            packagePath);
+    }
+
+    public async Task LaunchPreparedAsync(
+        PreparedApplicationUpdate update,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        var decision = UpdatePolicyEvaluator.Evaluate(
+            ApplicationVersionProvider.GetCurrent(),
+            update.Manifest,
+            _configuration.PublicKeyPem,
+            DateTimeOffset.UtcNow);
+        if (decision is not
+            {
+                Kind: UpdateDecisionKind.Required,
+                TargetVersion: { } targetVersion,
+            } ||
+            targetVersion.CompareTo(update.TargetVersion) != 0 ||
+            !File.Exists(update.PackagePath))
+        {
+            throw new InvalidOperationException("The prepared update is no longer valid.");
+        }
+
         var updaterSource = Path.GetFullPath(_installContext.UpdaterSourcePath);
         if (!File.Exists(updaterSource))
         {
             throw new FileNotFoundException("Update helper is missing from this installation.", updaterSource);
         }
 
+        var versionRoot = Path.Combine(
+            _installContext.UpdateRoot,
+            update.TargetVersion.ToString());
         var updaterDirectory = Path.Combine(versionRoot, "helper");
         Directory.CreateDirectory(updaterDirectory);
         var updaterPath = Path.Combine(updaterDirectory, "RightMenuCheck.Updater.exe");
@@ -139,10 +178,10 @@ public sealed class ApplicationUpdateService : IApplicationUpdateService
         var request = new UpdateInstallRequest(
             UpdateInstallRequest.CurrentSchemaVersion,
             _installContext.ProcessId,
-            packagePath,
+            Path.GetFullPath(update.PackagePath),
             applicationPath,
             installDirectory,
-            manifest,
+            update.Manifest,
             healthToken,
             readyEndpoint.PipeName,
             readyEndpoint.Nonce);

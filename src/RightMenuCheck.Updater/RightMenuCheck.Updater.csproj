@@ -6,12 +6,17 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseWPF>true</UseWPF>
     <ApplicationIcon>..\RightMenuCheck.App\Assets\RightMenuCheck.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\distribution\update-public-key.pem"
                       Link="update-public-key.pem" />
+    <Resource Include="..\RightMenuCheck.App\Assets\RightMenuCheck.ico"
+              Link="Assets\RightMenuCheck.ico" />
+    <Resource Include="..\RightMenuCheck.App\Assets\RightMenuCheck.png"
+              Link="Assets\RightMenuCheck.png" />
   </ItemGroup>
 
   <ItemGroup>

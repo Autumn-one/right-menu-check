@@ -95,9 +95,14 @@ public sealed class ApplicationUpdateServiceTests
             NullAppLogger.Instance);
 
         var check = await service.CheckAsync(CancellationToken.None);
-        await service.PrepareAndLaunchAsync(manifest, progress: null, CancellationToken.None);
+        var prepared = await service.PrepareAsync(
+            manifest,
+            progress: null,
+            CancellationToken.None);
+        await service.LaunchPreparedAsync(prepared, CancellationToken.None);
 
         Assert.Equal(UpdateDecisionKind.Required, check.Decision?.Kind);
+        Assert.Equal("9.0.0", prepared.TargetVersion.ToString());
         Assert.NotNull(launcher.RequestPath);
         var request = DistributionJson.Deserialize<UpdateInstallRequest>(
             File.ReadAllText(launcher.RequestPath));

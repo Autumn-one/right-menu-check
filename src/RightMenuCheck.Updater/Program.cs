@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using System.Windows;
 using RightMenuCheck.Distribution;
 using RightMenuCheck.Windows.Diagnostics;
 using RightMenuCheck.Windows.Security;
@@ -8,9 +9,56 @@ namespace RightMenuCheck.Updater;
 
 internal static class Program
 {
-    public static async Task<int> Main(string[] args)
+    [STAThread]
+    public static int Main(string[] args)
     {
         using var logger = StructuredFileLogger.CreateDefault("updater");
+        var application = new Application
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown,
+        };
+        var window = new UpdateProgressWindow();
+        var exitCode = 1;
+        application.Startup += async (_, _) =>
+        {
+            window.Show();
+            var outcome = await ExecuteAsync(
+                args,
+                logger,
+                new UpdateProgressObserver(window));
+            exitCode = outcome.ExitCode;
+            if (outcome.Succeeded)
+            {
+                window.ShowCompleted();
+                await Task.Delay(TimeSpan.FromMilliseconds(600));
+            }
+            else
+            {
+                window.ShowFailure(outcome.DisplayMessage);
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+
+            try
+            {
+                await logger.FlushAsync(CancellationToken.None);
+            }
+            catch (IOException)
+            {
+            }
+
+            window.AllowClose();
+            window.Close();
+            application.Shutdown(exitCode);
+        };
+        _ = application.Run();
+        return exitCode;
+    }
+
+    private static async Task<UpdaterExecutionOutcome> ExecuteAsync(
+        string[] args,
+        IAppLogger logger,
+        IUpdateTransactionObserver observer)
+    {
         try
         {
             ProcessElevationPolicy.ThrowIfElevated("Updater execution");
@@ -24,7 +72,8 @@ internal static class Program
                 new SystemUpdateTargetPolicy(),
                 new NamedPipeUpdateReadySignal(),
                 EmbeddedDistributionPublicKey.Load(),
-                logger);
+                logger,
+                observer);
             var result = await installer
                 .InstallAsync(request, CancellationToken.None)
                 .ConfigureAwait(false);
@@ -38,9 +87,13 @@ internal static class Program
                     ["rolledBack"] = result.RolledBack,
                     ["errorType"] = result.ErrorType,
                 });
-            await logger.FlushAsync(CancellationToken.None).ConfigureAwait(false);
             TryDeleteRequest(requestPath);
-            return result.Succeeded ? 0 : result.RolledBack ? 2 : 1;
+            return new UpdaterExecutionOutcome(
+                result.Succeeded ? 0 : result.RolledBack ? 2 : 1,
+                result.Succeeded,
+                result.RolledBack
+                    ? "新版本未通过启动验证，原版本已经恢复。"
+                    : "更新没有完成，当前版本不会被替换。");
         }
         catch (Exception exception) when (exception is
                                            ArgumentException or
@@ -56,8 +109,10 @@ internal static class Program
                 "update.unhandled_failure",
                 "Updater failed before installation completed.",
                 exception: exception);
-            await logger.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-            return 1;
+            return new UpdaterExecutionOutcome(
+                ExitCode: 1,
+                Succeeded: false,
+                "更新程序未能完成准备，当前版本不会被替换。");
         }
     }
 
@@ -87,4 +142,9 @@ internal static class Program
         {
         }
     }
+
+    private sealed record UpdaterExecutionOutcome(
+        int ExitCode,
+        bool Succeeded,
+        string DisplayMessage);
 }

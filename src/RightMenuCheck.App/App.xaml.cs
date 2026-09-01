@@ -20,6 +20,7 @@ public partial class App : Application, IDisposable
     private CancellationTokenSource? _lifetime;
     private IAppLogger? _logger;
     private AppTelemetryClient? _telemetryClient;
+    private ApplicationUpdateCoordinator? _updateCoordinator;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -72,6 +73,8 @@ public partial class App : Application, IDisposable
     protected override void OnExit(ExitEventArgs e)
     {
         _lifetime?.Cancel();
+        _updateCoordinator?.Dispose();
+        _updateCoordinator = null;
         if (_telemetryClient is not null)
         {
             try
@@ -116,6 +119,8 @@ public partial class App : Application, IDisposable
 
     public void Dispose()
     {
+        _updateCoordinator?.Dispose();
+        _updateCoordinator = null;
         _telemetryClient?.Dispose();
         _telemetryClient = null;
         _announcementStateStore?.Dispose();
@@ -147,21 +152,34 @@ public partial class App : Application, IDisposable
             new SystemApplicationInstallContext(),
             new SystemUpdaterLauncher(),
             _logger!);
+        _updateCoordinator = new ApplicationUpdateCoordinator(updateService, _logger!);
         while (true)
         {
-            var updateCheck = await updateService.CheckAsync(cancellationToken);
+            ApplicationUpdatePreparation preparation;
+            try
+            {
+                preparation = await _updateCoordinator.CheckAndPrepareAsync(
+                    downloadProgress: null,
+                    cancellationToken);
+            }
+            catch (Exception exception) when (IsRecoverableUpdateFailure(exception))
+            {
+                var failedWindow = new VersionStatusWindow(
+                    $"暂时无法准备更新：{exception.Message}");
+                MainWindow = failedWindow;
+                _ = failedWindow.ShowDialog();
+                continue;
+            }
+
+            var updateCheck = preparation.Check;
             if (updateCheck.State == ApplicationUpdateState.Current)
             {
                 break;
             }
 
-            if (updateCheck is
-                {
-                    State: ApplicationUpdateState.Required,
-                    Manifest: { } manifest,
-                })
+            if (preparation.PreparedUpdate is { } preparedUpdate)
             {
-                var updateWindow = new UpdateRequiredWindow(updateService, manifest);
+                var updateWindow = new UpdateRequiredWindow(updateService, preparedUpdate);
                 MainWindow = updateWindow;
                 if (updateWindow.ShowDialog() == true)
                 {
@@ -212,6 +230,13 @@ public partial class App : Application, IDisposable
         MainWindow = mainWindow;
         ShutdownMode = ShutdownMode.OnMainWindowClose;
         mainWindow.Show();
+        _updateCoordinator.Start(
+            (prepared, token) => PromptForUpdateAsync(
+                updateService,
+                mainWindow,
+                prepared,
+                token),
+            cancellationToken);
         if (startupArguments.UpdateRolledBack)
         {
             _logger!.Log(
@@ -232,6 +257,33 @@ public partial class App : Application, IDisposable
             _announcementStateStore,
             _logger!);
         await announcementService.ShowPendingAsync(mainWindow, cancellationToken);
+    }
+
+    private async Task<bool> PromptForUpdateAsync(
+        IApplicationUpdateService updateService,
+        Window owner,
+        PreparedApplicationUpdate preparedUpdate,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var operation = Dispatcher.InvokeAsync(
+            () =>
+            {
+                var updateWindow = new UpdateRequiredWindow(updateService, preparedUpdate)
+                {
+                    Owner = owner,
+                };
+                var accepted = updateWindow.ShowDialog() == true;
+                if (accepted)
+                {
+                    _ = Dispatcher.BeginInvoke(Shutdown);
+                }
+
+                return accepted;
+            },
+            DispatcherPriority.Normal,
+            cancellationToken);
+        return await operation.Task.ConfigureAwait(false);
     }
 
     private void StartTelemetry(ResolvedTelemetryEndpoint? endpoint)
@@ -295,4 +347,12 @@ public partial class App : Application, IDisposable
             exception: e.Exception);
         e.Handled = false;
     }
+
+    private static bool IsRecoverableUpdateFailure(Exception exception) => exception is
+        HttpRequestException or
+        IOException or
+        InvalidDataException or
+        InvalidOperationException or
+        TimeoutException or
+        UnauthorizedAccessException;
 }

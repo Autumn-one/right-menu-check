@@ -9,19 +9,19 @@ namespace RightMenuCheck.App;
 
 public partial class UpdateRequiredWindow : Window
 {
-    private readonly SignedUpdateManifest _manifest;
+    private readonly PreparedApplicationUpdate _preparedUpdate;
     private readonly IApplicationUpdateService _updateService;
     private bool _allowClose;
     private bool _isWorking;
 
     public UpdateRequiredWindow(
         IApplicationUpdateService updateService,
-        SignedUpdateManifest manifest)
+        PreparedApplicationUpdate preparedUpdate)
     {
         _updateService = updateService ?? throw new ArgumentNullException(nameof(updateService));
-        _manifest = manifest ?? throw new ArgumentNullException(nameof(manifest));
+        _preparedUpdate = preparedUpdate ?? throw new ArgumentNullException(nameof(preparedUpdate));
         InitializeComponent();
-        VersionText.Text = $"版本 {_manifest.Payload.Version}";
+        VersionText.Text = $"版本 {_preparedUpdate.TargetVersion}";
         Closing += UpdateRequiredWindow_Closing;
     }
 
@@ -35,16 +35,16 @@ public partial class UpdateRequiredWindow : Window
         _isWorking = true;
         UpdateButton.IsEnabled = false;
         UpdateButton.Content = "正在更新";
-        StatusText.Text = "正在下载并验证更新包…";
-        DownloadProgress.Value = 0;
-        var progress = new Progress<double>(value => DownloadProgress.Value = value * 100);
+        StatusText.Text = "正在启动更新程序…";
+        UpdateProgress.IsIndeterminate = true;
         try
         {
-            await _updateService.PrepareAndLaunchAsync(
-                _manifest,
-                progress,
+            await _updateService.LaunchPreparedAsync(
+                _preparedUpdate,
                 CancellationToken.None);
-            StatusText.Text = "更新程序已启动，正在关闭当前版本…";
+            UpdateProgress.IsIndeterminate = false;
+            UpdateProgress.Value = 35;
+            StatusText.Text = "更新程序已接管，正在关闭当前版本…";
             _allowClose = true;
             DialogResult = true;
         }
@@ -57,6 +57,8 @@ public partial class UpdateRequiredWindow : Window
                                            UnauthorizedAccessException)
         {
             StatusText.Text = $"暂时无法完成更新：{exception.Message}";
+            UpdateProgress.IsIndeterminate = false;
+            UpdateProgress.Value = 0;
             UpdateButton.Content = "重试";
             UpdateButton.IsEnabled = true;
             _isWorking = false;

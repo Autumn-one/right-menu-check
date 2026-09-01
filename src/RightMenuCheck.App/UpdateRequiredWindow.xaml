@@ -36,22 +36,23 @@
     <TextBlock Grid.Row="1"
                Margin="0,24,0,0"
                FontSize="14"
-               Text="需要完成更新后继续使用。更新包会优先通过国内镜像下载，并在安装前验证签名与完整性。"
+               Text="需要完成更新后继续使用。更新包已通过镜像下载，并完成签名与完整性验证。"
                TextWrapping="Wrap" />
 
     <TextBlock x:Name="StatusText"
                Grid.Row="2"
                Margin="0,20,0,0"
                Foreground="{StaticResource TextSecondaryBrush}"
-               Text="准备下载更新…"
+               Text="更新已准备好。"
                TextWrapping="Wrap" />
 
-    <ProgressBar x:Name="DownloadProgress"
+    <ProgressBar x:Name="UpdateProgress"
                  Grid.Row="3"
                  Height="5"
                  Margin="0,0,0,18"
                  Minimum="0"
                  Maximum="100"
+                 Value="30"
                  Foreground="{StaticResource AccentBrush}"
                  Background="#D7DEE1" />
 
