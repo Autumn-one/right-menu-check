@@ -1,0 +1,94 @@
+<Window x:Class="RightMenuCheck.Installer.InstallerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RightMenuCheck 安装程序"
+        Icon="/RightMenuCheck.Installer;component/Assets/RightMenuCheck.ico"
+        Width="620"
+        Height="450"
+        MinWidth="620"
+        MinHeight="450"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen">
+  <Grid Margin="34,28,34,28">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <Grid Grid.Row="0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="56" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Image Width="52"
+             Height="52"
+             Source="/RightMenuCheck.Installer;component/Assets/RightMenuCheck.png"
+             Stretch="Uniform" />
+      <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+        <TextBlock FontSize="23"
+                   FontWeight="SemiBold"
+                   Text="安装 RightMenuCheck" />
+        <TextBlock x:Name="VersionText"
+                   Margin="0,4,0,0"
+                   Foreground="{StaticResource InstallerSecondaryBrush}" />
+      </StackPanel>
+    </Grid>
+
+    <StackPanel Grid.Row="1" Margin="0,28,0,0">
+      <TextBlock FontWeight="SemiBold" Text="安装位置" />
+      <TextBox x:Name="InstallPathText"
+               Height="34"
+               Margin="0,8,0,0"
+               Padding="9,6"
+               IsReadOnly="True"
+               Background="{StaticResource InstallerSurfaceBrush}"
+               BorderBrush="{StaticResource InstallerBorderBrush}"
+               BorderThickness="1"
+               Foreground="{StaticResource InstallerSecondaryBrush}" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="2" Margin="0,22,0,0">
+      <CheckBox x:Name="DesktopShortcutCheck"
+                IsChecked="True"
+                Content="创建桌面快捷方式" />
+      <CheckBox x:Name="LaunchAfterInstallCheck"
+                Margin="0,10,0,0"
+                IsChecked="True"
+                Content="安装完成后启动 RightMenuCheck" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="3" Margin="0,26,0,18" VerticalAlignment="Bottom">
+      <TextBlock x:Name="StatusText"
+                 MinHeight="20"
+                 Foreground="{StaticResource InstallerSecondaryBrush}"
+                 Text="准备安装。"
+                 TextWrapping="Wrap" />
+      <ProgressBar x:Name="InstallProgress"
+                   Margin="0,12,0,0"
+                   Minimum="0"
+                   Maximum="100"
+                   Value="0"
+                   Style="{StaticResource InstallerProgressStyle}" />
+    </StackPanel>
+
+    <Separator Grid.Row="4"
+               Margin="0,0,0,18"
+               Background="{StaticResource InstallerBorderBrush}" />
+
+    <StackPanel Grid.Row="5" HorizontalAlignment="Right" Orientation="Horizontal">
+      <Button x:Name="CancelButton"
+              Margin="0,0,10,0"
+              Style="{StaticResource InstallerButtonStyle}"
+              Click="CancelButton_Click"
+              Content="取消" />
+      <Button x:Name="InstallButton"
+              Style="{StaticResource InstallerPrimaryButtonStyle}"
+              Click="InstallButton_Click"
+              Content="安装" />
+    </StackPanel>
+  </Grid>
+</Window>

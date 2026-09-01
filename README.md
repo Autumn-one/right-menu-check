@@ -38,3 +38,9 @@ pwsh -NoLogo -NoProfile -File .\scripts\publish.ps1 -Version 0.1.0
 发布完成后，可以在项目根目录双击 `Run-RightMenuCheck.cmd` 启动软件。
 
 遥测服务的 Linux 双架构包和一行安装方式见 `services/RightMenuCheck.Telemetry/README.md`。
+
+Windows 每用户安装包固定生成到 `artifacts\packages\windows`：
+
+```powershell
+pwsh -NoLogo -NoProfile -File .\scripts\build-windows-installer.ps1 -Version 0.1.1
+```

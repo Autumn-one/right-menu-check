@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>..\RightMenuCheck.App\Assets\RightMenuCheck.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\RightMenuCheck.App\Assets\RightMenuCheck.ico"
+              Link="Assets\RightMenuCheck.ico" />
+    <Resource Include="..\RightMenuCheck.App\Assets\RightMenuCheck.png"
+              Link="Assets\RightMenuCheck.png" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PayloadPath)' != ''">
+    <EmbeddedResource Include="$(PayloadPath)"
+                      LogicalName="RightMenuCheck.Payload.zip" />
+    <AssemblyMetadata Include="RightMenuCheck.PayloadSha256"
+                      Value="$(PayloadSha256)" />
+    <AssemblyMetadata Include="RightMenuCheck.PayloadVersion"
+                      Value="$(PayloadVersion)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UninstallerPath)' != ''">
+    <EmbeddedResource Include="$(UninstallerPath)"
+                      LogicalName="RightMenuCheck.Uninstaller.exe" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RightMenuCheck.Installation\RightMenuCheck.Installation.csproj" />
+  </ItemGroup>
+
+  <Target Name="ValidateSetupInputs"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(BuildingSetupPackage)' == 'true'">
+    <Error Condition="'$(PayloadPath)' == '' or !Exists('$(PayloadPath)')"
+           Text="Setup payload ZIP is missing." />
+    <Error Condition="'$(UninstallerPath)' == '' or !Exists('$(UninstallerPath)')"
+           Text="Setup uninstaller payload is missing." />
+    <Error Condition="'$(PayloadSha256)' == ''"
+           Text="Setup payload SHA-256 is missing." />
+    <Error Condition="'$(PayloadVersion)' == ''"
+           Text="Setup payload version is missing." />
+  </Target>
+
+</Project>
