@@ -22,3 +22,17 @@ dotnet test RightMenuCheck.slnx --configuration Debug --no-build
 ```
 
 所有构建产物统一写入仓库内的 `artifacts` 目录。
+
+完整、可直接运行的自包含版本固定发布到：
+
+```text
+artifacts\publish\RightMenuCheck\RightMenuCheck.App.exe
+```
+
+从项目根目录执行以下命令会原位更新该目录，不会为每次构建创建新的位置：
+
+```powershell
+pwsh -NoLogo -NoProfile -File .\scripts\publish.ps1 -Version 0.1.0
+```
+
+发布完成后，可以在项目根目录双击 `Run-RightMenuCheck.cmd` 启动软件。
