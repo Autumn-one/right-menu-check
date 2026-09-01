@@ -200,6 +200,28 @@ public sealed class ProbeWorkerClientTests
         var testOutput = new DirectoryInfo(AppContext.BaseDirectory);
         var artifactsRoot = testOutput.Parent?.Parent?.Parent ??
                             throw new DirectoryNotFoundException("The shared artifacts directory was not found.");
+        var architectureDirectory = publishConfiguration switch
+        {
+            "release_win-x64" => "x64",
+            "release_win-x86" => "x86",
+            "release_win-arm64" => "arm64",
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(publishConfiguration),
+                publishConfiguration,
+                "The publish configuration is not recognized."),
+        };
+        var canonicalPath = Path.Combine(
+            artifactsRoot.FullName,
+            "publish",
+            "RightMenuCheck",
+            "workers",
+            architectureDirectory,
+            "RightMenuCheck.Probe.Worker.exe");
+        if (File.Exists(canonicalPath))
+        {
+            return canonicalPath;
+        }
+
         return Path.Combine(
             artifactsRoot.FullName,
             "publish",
