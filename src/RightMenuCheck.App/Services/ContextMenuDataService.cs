@@ -88,6 +88,14 @@ public sealed class ContextMenuDataService : IContextMenuDataService
                 });
             return snapshot;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.Log(
+                AppLogLevel.Information,
+                "scan.canceled",
+                "Context-menu inventory scan was canceled.");
+            throw;
+        }
 #pragma warning disable CA1031
         catch (Exception exception)
 #pragma warning restore CA1031
