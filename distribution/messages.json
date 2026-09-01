@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "payload": {
+    "sequence": 3,
+    "issuedAtUtc": "2026-08-30T23:04:32.3269873+00:00",
+    "expiresAtUtc": "2027-08-30T23:04:32.3269873+00:00",
+    "messages": []
+  },
+  "signatureAlgorithm": "ECDSA_P256_SHA256",
+  "signature": "MEQCIGUEoTpry9QJc9u6JA1gahPkFITkPunoYPdStubVSkJLAiAXTlTwxsk/wAgtgYCwwrhovKfVDx2XL2jtb09ZP4y\u002BOw=="
+}
