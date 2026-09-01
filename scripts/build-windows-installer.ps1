@@ -4,7 +4,9 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$Version,
 
-    [switch]$SkipApplicationPublish
+    [switch]$SkipApplicationPublish,
+
+    [string]$SourceRevisionId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,9 +48,13 @@ if (-not $outputRoot.Equals($allowedOutputRoot, [StringComparison]::OrdinalIgnor
 }
 
 if (-not $SkipApplicationPublish) {
+    $publishArguments = @('-Version', $Version)
+    if (-not [string]::IsNullOrWhiteSpace($SourceRevisionId)) {
+        $publishArguments += @('-SourceRevisionId', $SourceRevisionId)
+    }
     & pwsh -NoLogo -NoProfile -File `
         (Join-Path $repoRoot 'scripts\publish.ps1') `
-        -Version $Version
+        @publishArguments
     if ($LASTEXITCODE -ne 0) {
         throw 'Application publish failed before setup packaging.'
     }
@@ -67,6 +73,12 @@ if (-not ([string]$buildInfo.product).Equals(
         [StringComparison]::Ordinal) -or
     $buildInfo.selfContained -ne $true) {
     throw "Canonical application publish does not match setup version $Version."
+}
+if (-not [string]::IsNullOrWhiteSpace($SourceRevisionId) -and
+    -not ([string]$buildInfo.commit).Equals(
+        $SourceRevisionId.Trim(),
+        [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Canonical application publish does not match source revision $SourceRevisionId."
 }
 
 $requiredPublishFiles = @(
@@ -158,8 +170,14 @@ finally {
 }
 
 $payloadSha256 = (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash
-$commit = (& git -C $repoRoot rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[0-9a-f]{40}$') {
+$commit = if ([string]::IsNullOrWhiteSpace($SourceRevisionId)) {
+    (& git -C $repoRoot rev-parse HEAD).Trim()
+}
+else {
+    $SourceRevisionId.Trim().ToLowerInvariant()
+}
+if (($LASTEXITCODE -ne 0 -and [string]::IsNullOrWhiteSpace($SourceRevisionId)) -or
+    $commit -notmatch '^[0-9a-f]{40}$') {
     throw 'Unable to resolve the current Git commit.'
 }
 $commonProperties = @(

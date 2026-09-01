@@ -2,7 +2,9 @@
 param(
     [Parameter(Mandatory, Position = 0)]
     [ValidateNotNullOrEmpty()]
-    [string]$Version
+    [string]$Version,
+
+    [string]$SourceRevisionId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,8 +50,14 @@ if (Test-Path -LiteralPath $publishRoot) {
 }
 
 New-Item -ItemType Directory -Path $publishRoot -Force | Out-Null
-$commit = (& git -C $repoRoot rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[0-9a-f]{40}$') {
+$commit = if ([string]::IsNullOrWhiteSpace($SourceRevisionId)) {
+    (& git -C $repoRoot rev-parse HEAD).Trim()
+}
+else {
+    $SourceRevisionId.Trim().ToLowerInvariant()
+}
+if (($LASTEXITCODE -ne 0 -and [string]::IsNullOrWhiteSpace($SourceRevisionId)) -or
+    $commit -notmatch '^[0-9a-f]{40}$') {
     throw 'Unable to resolve the current Git commit.'
 }
 
