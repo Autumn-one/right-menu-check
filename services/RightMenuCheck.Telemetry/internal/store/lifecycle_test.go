@@ -193,7 +193,7 @@ func TestResumeSettlesStillActiveSegmentAtomically(t *testing.T) {
 	}
 	assertSummary(t, dataStore, Summary{
 		MachineCount: 1, StartupCount: 1, SessionCount: 2, ActiveSessionCount: 1,
-		AbnormalSessionCount: 1, TotalDurationMS: 15_000,
+		ActiveMachineCount: 1, AbnormalSessionCount: 1, TotalDurationMS: 15_000,
 	})
 }
 
@@ -238,7 +238,7 @@ func TestResumeAfterServiceRestartKeepsOriginalStartupCount(t *testing.T) {
 	}
 	assertSummary(t, dataStore, Summary{
 		MachineCount: 1, StartupCount: 1, SessionCount: 2, ActiveSessionCount: 1,
-		AbnormalSessionCount: 1, TotalDurationMS: 30_000,
+		ActiveMachineCount: 1, AbnormalSessionCount: 1, TotalDurationMS: 30_000,
 	})
 }
 
@@ -272,12 +272,44 @@ func TestRetentionDeletesRawSessionsWithoutLosingAggregates(t *testing.T) {
 	if before != after {
 		t.Fatalf("summary changed across retention: before=%#v after=%#v", before, after)
 	}
-	rows, err := dataStore.Sessions(ctx, 10, 0, startedAt.Add(time.Hour))
+	rows, err := dataStore.Sessions(ctx, "", 10, 0, startedAt.Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(rows) != 0 {
 		t.Fatalf("retained rows remain: %#v", rows)
+	}
+}
+
+func TestSessionsCanBeFilteredByMachineWithLifecycleTimes(t *testing.T) {
+	dataStore := openTestStore(t, filepath.Join(t.TempDir(), "telemetry.db"))
+	defer dataStore.Close()
+	ctx := context.Background()
+	startedAt := time.Date(2026, 8, 31, 6, 30, 0, 0, time.UTC)
+	firstToken := testDigest("first machine")
+	secondToken := testDigest("second machine")
+	if _, err := dataStore.Start(ctx, machineA, sessionA, firstToken, startedAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := dataStore.End(
+		ctx, machineA, sessionA, firstToken, startedAt.Add(20*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dataStore.Start(
+		ctx, machineB, sessionB, secondToken, startedAt.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := dataStore.Sessions(ctx, machineA, 10, 0, startedAt.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].MachineID != machineA || rows[0].EndedAt == nil ||
+		!rows[0].StartedAt.Equal(startedAt) ||
+		!rows[0].LastSeenAt.Equal(startedAt) ||
+		!rows[0].EndedAt.Equal(startedAt.Add(20*time.Second)) ||
+		rows[0].DurationMS != 20_000 || rows[0].ExitKind != "normal" {
+		t.Fatalf("filtered sessions = %#v", rows)
 	}
 }
 

@@ -24,7 +24,7 @@ func TestLoadAllowsExplicitUnauthenticatedLoopbackTestMode(t *testing.T) {
 	if cfg.ListenAddress != defaultListenAddress || cfg.DatabasePath != defaultDatabasePath {
 		t.Fatalf("unexpected defaults: %#v", cfg)
 	}
-	if cfg.SessionTimeout != 3*time.Minute || cfg.ClosedSessionTTL != 7*24*time.Hour ||
+	if cfg.SessionTimeout != 7*time.Minute || cfg.ClosedSessionTTL != 7*24*time.Hour ||
 		cfg.HandlerTimeout != 5*time.Second {
 		t.Fatalf("unexpected lifecycle defaults: %#v", cfg)
 	}
@@ -107,7 +107,7 @@ func TestLoadRejectsUnsafeValues(t *testing.T) {
 		"RMC_TELEMETRY_ALLOW_UNAUTHENTICATED_LOOPBACK_ADMIN": "not-bool",
 		"RMC_TELEMETRY_SESSION_TIMEOUT":                      "0s",
 		"RMC_TELEMETRY_CLOSED_SESSION_TTL":                   "1s",
-		"RMC_TELEMETRY_SWEEP_INTERVAL":                       "4m",
+		"RMC_TELEMETRY_SWEEP_INTERVAL":                       "8m",
 		"RMC_TELEMETRY_HANDLER_TIMEOUT":                      "31s",
 		"RMC_TELEMETRY_SHUTDOWN_TIMEOUT":                     "-1s",
 		"RMC_TELEMETRY_MAX_REQUEST_BYTES":                    "128",

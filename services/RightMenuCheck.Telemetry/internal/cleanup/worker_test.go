@@ -109,7 +109,8 @@ func TestRunNowPrunesRetainedRowsWithoutChangingAggregates(t *testing.T) {
 	if before != after {
 		t.Fatalf("aggregates changed after retention: before=%#v after=%#v", before, after)
 	}
-	rows, err := dataStore.Sessions(context.Background(), 10, 0, startedAt.Add(3*time.Hour))
+	rows, err := dataStore.Sessions(
+		context.Background(), "", 10, 0, startedAt.Add(3*time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ public static class TelemetryEndpoints
 
 public sealed record TelemetryClientOptions
 {
-    public static readonly TimeSpan DefaultHeartbeatInterval = TimeSpan.FromMinutes(1);
+    public static readonly TimeSpan DefaultHeartbeatInterval = TimeSpan.FromMinutes(2);
     public static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(5);
     public static readonly TimeSpan DefaultInitialRetryDelay = TimeSpan.FromSeconds(5);
     public static readonly TimeSpan DefaultMaximumRetryDelay = TimeSpan.FromMinutes(5);

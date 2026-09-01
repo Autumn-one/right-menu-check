@@ -56,6 +56,7 @@ type Summary struct {
 	StartupCount         int64
 	SessionCount         int64
 	ActiveSessionCount   int64
+	ActiveMachineCount   int64
 	NormalSessionCount   int64
 	AbnormalSessionCount int64
 	TotalDurationMS      int64
@@ -69,11 +70,15 @@ type Machine struct {
 	TotalDurationMS      int64
 	NormalSessionCount   int64
 	AbnormalSessionCount int64
+	ActiveSessionCount   int64
+	LastSeenAt           time.Time
 }
 
 type Session struct {
 	MachineID  string
 	StartedAt  time.Time
+	LastSeenAt time.Time
+	EndedAt    *time.Time
 	DurationMS int64
 	ExitKind   string
 }

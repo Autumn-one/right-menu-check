@@ -381,7 +381,7 @@ public sealed class AppTelemetryClientTests
     [Fact]
     public void OptionsRequireSecureSlashTerminatedBaseAddress()
     {
-        _ = new TelemetryClientOptions(new Uri("https://telemetry.example.test/"));
+        var defaults = new TelemetryClientOptions(new Uri("https://telemetry.example.test/"));
         _ = new TelemetryClientOptions(new Uri("http://127.0.0.1:8123/"));
         _ = new TelemetryClientOptions(
             new Uri("http://43.159.148.243/"),
@@ -393,6 +393,7 @@ public sealed class AppTelemetryClientTests
             new TelemetryClientOptions(new Uri("https://telemetry.example.test/api")));
         Assert.Throws<ArgumentException>(() =>
             new TelemetryClientOptions(new Uri("https://telemetry.example.test/?token=secret")));
+        Assert.Equal(TimeSpan.FromMinutes(2), defaults.HeartbeatInterval);
     }
 
     private static Func<RecordedRequest, HttpResponseMessage> SessionResponse(

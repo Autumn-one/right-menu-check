@@ -42,7 +42,7 @@ type DataStore interface {
 	End(context.Context, string, string, sessiontoken.Digest, time.Time) error
 	Summary(context.Context) (store.Summary, error)
 	Machines(context.Context, int, int) ([]store.Machine, error)
-	Sessions(context.Context, int, int, time.Time) ([]store.Session, error)
+	Sessions(context.Context, string, int, int, time.Time) ([]store.Session, error)
 }
 
 type Clock func() time.Time
@@ -99,6 +99,7 @@ type summaryResponse struct {
 	StartupCount         int64 `json:"startupCount"`
 	SessionCount         int64 `json:"sessionCount"`
 	ActiveSessionCount   int64 `json:"activeSessionCount"`
+	ActiveMachineCount   int64 `json:"activeMachineCount"`
 	NormalSessionCount   int64 `json:"normalSessionCount"`
 	AbnormalSessionCount int64 `json:"abnormalSessionCount"`
 	TotalDurationMS      int64 `json:"totalDurationMilliseconds"`
@@ -112,13 +113,17 @@ type machineResponse struct {
 	TotalDurationMS      int64     `json:"totalDurationMilliseconds"`
 	NormalSessionCount   int64     `json:"normalSessionCount"`
 	AbnormalSessionCount int64     `json:"abnormalSessionCount"`
+	ActiveSessionCount   int64     `json:"activeSessionCount"`
+	LastSeenAtUTC        time.Time `json:"lastSeenAtUtc"`
 }
 
 type sessionResponse struct {
-	MachineID    string    `json:"machineId"`
-	StartedAtUTC time.Time `json:"startedAtUtc"`
-	DurationMS   int64     `json:"durationMilliseconds"`
-	ExitKind     string    `json:"exitKind"`
+	MachineID     string     `json:"machineId"`
+	StartedAtUTC  time.Time  `json:"startedAtUtc"`
+	LastSeenAtUTC time.Time  `json:"lastSeenAtUtc"`
+	EndedAtUTC    *time.Time `json:"endedAtUtc"`
+	DurationMS    int64      `json:"durationMilliseconds"`
+	ExitKind      string     `json:"exitKind"`
 }
 
 type pageResponse[T any] struct {
@@ -146,6 +151,10 @@ func New(dataStore DataStore, options Options) *Server {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", server.dashboard)
+	mux.HandleFunc("/assets/dashboard.css", server.dashboardCSS)
+	mux.HandleFunc("/assets/dashboard.js", server.dashboardJS)
+	mux.HandleFunc("/assets/RightMenuCheck.png", server.dashboardLogo)
 	mux.HandleFunc("/health", server.health)
 	mux.HandleFunc(startPath, server.start)
 	mux.HandleFunc(resumePath, server.resume)
@@ -228,6 +237,11 @@ func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Cache-Control", "no-store")
 		response.Header().Set("X-Content-Type-Options", "nosniff")
+		response.Header().Set("Referrer-Policy", "no-referrer")
+		response.Header().Set(
+			"Content-Security-Policy",
+			"default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'",
+		)
 		next.ServeHTTP(response, request)
 	})
 }
@@ -520,6 +534,7 @@ func (s *Server) summary(response http.ResponseWriter, request *http.Request) {
 		StartupCount:         result.StartupCount,
 		SessionCount:         result.SessionCount,
 		ActiveSessionCount:   result.ActiveSessionCount,
+		ActiveMachineCount:   result.ActiveMachineCount,
 		NormalSessionCount:   result.NormalSessionCount,
 		AbnormalSessionCount: result.AbnormalSessionCount,
 		TotalDurationMS:      result.TotalDurationMS,
@@ -550,6 +565,8 @@ func (s *Server) machines(response http.ResponseWriter, request *http.Request) {
 			TotalDurationMS:      row.TotalDurationMS,
 			NormalSessionCount:   row.NormalSessionCount,
 			AbnormalSessionCount: row.AbnormalSessionCount,
+			ActiveSessionCount:   row.ActiveSessionCount,
+			LastSeenAtUTC:        row.LastSeenAt.UTC(),
 		})
 	}
 	writeJSON(response, http.StatusOK, pageResponse[machineResponse]{
@@ -566,18 +583,35 @@ func (s *Server) sessions(response http.ResponseWriter, request *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := s.store.Sessions(request.Context(), limit, offset, s.clock().UTC())
+	machineID := ""
+	if requestedMachine := request.URL.Query().Get("machineId"); requestedMachine != "" {
+		normalized, valid := identity.MachineID(requestedMachine)
+		if !valid {
+			writeError(response, http.StatusBadRequest, "invalid_identity")
+			return
+		}
+		machineID = normalized
+	}
+	rows, err := s.store.Sessions(
+		request.Context(), machineID, limit, offset, s.clock().UTC())
 	if err != nil {
 		s.writeStoreError(response, err)
 		return
 	}
 	items := make([]sessionResponse, 0, len(rows))
 	for _, row := range rows {
+		var endedAt *time.Time
+		if row.EndedAt != nil {
+			value := row.EndedAt.UTC()
+			endedAt = &value
+		}
 		items = append(items, sessionResponse{
-			MachineID:    row.MachineID,
-			StartedAtUTC: row.StartedAt.UTC(),
-			DurationMS:   row.DurationMS,
-			ExitKind:     row.ExitKind,
+			MachineID:     row.MachineID,
+			StartedAtUTC:  row.StartedAt.UTC(),
+			LastSeenAtUTC: row.LastSeenAt.UTC(),
+			EndedAtUTC:    endedAt,
+			DurationMS:    row.DurationMS,
+			ExitKind:      row.ExitKind,
 		})
 	}
 	writeJSON(response, http.StatusOK, pageResponse[sessionResponse]{

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RightMenuCheck 埋点管理</title>
+  <link rel="stylesheet" href="/assets/dashboard.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <img src="/assets/RightMenuCheck.png" alt="" width="36" height="36">
+      <div>
+        <strong>RightMenuCheck</strong>
+        <span>埋点管理</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="lastUpdated" class="muted"></span>
+      <button id="refreshButton" type="button">刷新</button>
+      <button id="logoutButton" class="quiet" type="button">退出</button>
+    </div>
+  </header>
+
+  <section class="metrics" aria-label="运行概览">
+    <div><span>设备总数</span><strong id="machineCount">-</strong></div>
+    <div><span>在线设备</span><strong id="activeMachineCount">-</strong></div>
+    <div><span>运行会话</span><strong id="activeSessionCount">-</strong></div>
+    <div><span>启动总次数</span><strong id="startupCount">-</strong></div>
+    <div><span>会话总数</span><strong id="sessionCount">-</strong></div>
+    <div><span>累计运行</span><strong id="totalDuration">-</strong></div>
+  </section>
+
+  <main class="workspace">
+    <section class="device-pane" aria-labelledby="deviceHeading">
+      <div class="pane-toolbar">
+        <div>
+          <h1 id="deviceHeading">设备</h1>
+          <span id="deviceRange" class="muted"></span>
+        </div>
+        <div class="pager">
+          <button id="previousDevices" type="button" aria-label="上一页">上一页</button>
+          <button id="nextDevices" type="button" aria-label="下一页">下一页</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>设备</th>
+              <th class="numeric">启动</th>
+              <th class="numeric">累计运行</th>
+              <th>最后启动</th>
+              <th class="numeric">异常</th>
+            </tr>
+          </thead>
+          <tbody id="deviceRows"></tbody>
+        </table>
+      </div>
+      <div id="emptyDevices" class="empty" hidden>暂无设备</div>
+    </section>
+
+    <aside id="detailPane" class="detail-pane" aria-labelledby="detailHeading">
+      <div class="detail-heading">
+        <div>
+          <span id="detailStatus" class="status-badge idle">未选择</span>
+          <h2 id="detailHeading">设备历史</h2>
+        </div>
+        <button id="closeDetail" class="quiet" type="button">关闭</button>
+      </div>
+      <dl class="device-summary">
+        <div><dt>设备标识</dt><dd id="detailMachine">-</dd></div>
+        <div><dt>启动次数</dt><dd id="detailStarts">-</dd></div>
+        <div><dt>累计运行</dt><dd id="detailDuration">-</dd></div>
+        <div><dt>最后心跳</dt><dd id="detailLastSeen">-</dd></div>
+      </dl>
+      <div class="history-toolbar">
+        <h3>埋点记录</h3>
+        <div class="pager">
+          <button id="previousSessions" type="button">上一页</button>
+          <button id="nextSessions" type="button">下一页</button>
+        </div>
+      </div>
+      <div class="table-scroll history-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>启动时间</th>
+              <th>结束时间</th>
+              <th class="numeric">持续时间</th>
+              <th>结果</th>
+            </tr>
+          </thead>
+          <tbody id="sessionRows"></tbody>
+        </table>
+      </div>
+      <div id="emptySessions" class="empty" hidden>暂无保留记录</div>
+    </aside>
+  </main>
+
+  <footer id="statusBar" class="status-bar">准备就绪</footer>
+
+  <dialog id="loginDialog">
+    <form id="loginForm" method="dialog">
+      <img src="/assets/RightMenuCheck.png" alt="" width="44" height="44">
+      <h2>管理验证</h2>
+      <label for="tokenInput">管理 Token</label>
+      <input id="tokenInput" type="password" autocomplete="current-password" required>
+      <p id="loginError" class="error" hidden>Token 无效</p>
+      <button type="submit">进入</button>
+    </form>
+  </dialog>
+
+  <script src="/assets/dashboard.js"></script>
+</body>
+</html>

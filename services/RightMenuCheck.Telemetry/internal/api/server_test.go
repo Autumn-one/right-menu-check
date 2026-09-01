@@ -79,12 +79,88 @@ func TestAuthenticatedTelemetryProtocolUsesServerTime(t *testing.T) {
 		t.Fatal(err)
 	}
 	if summaryPayload.MachineCount != 1 || summaryPayload.StartupCount != 1 ||
-		summaryPayload.NormalSessionCount != 1 || summaryPayload.TotalDurationMS != 25_000 {
+		summaryPayload.ActiveMachineCount != 0 || summaryPayload.NormalSessionCount != 1 ||
+		summaryPayload.TotalDurationMS != 25_000 {
 		t.Fatalf("unexpected summary: %#v", summaryPayload)
 	}
 	sessions := perform(server.Handler(), http.MethodGet, "/v1/admin/sessions", "", "", "127.0.0.1:5000", "Bearer "+adminToken)
-	if sessions.Code != http.StatusOK || strings.Contains(strings.ToLower(sessions.Body.String()), "token") {
+	if sessions.Code != http.StatusOK || strings.Contains(strings.ToLower(sessions.Body.String()), "token") ||
+		!strings.Contains(sessions.Body.String(), "lastSeenAtUtc") ||
+		!strings.Contains(sessions.Body.String(), "endedAtUtc") {
 		t.Fatalf("session query exposed token data: %d, %s", sessions.Code, sessions.Body.String())
+	}
+}
+
+func TestDashboardAssetsAndMachineFilteredHistory(t *testing.T) {
+	dataStore := newTestStore(t)
+	defer dataStore.Close()
+	now := time.Date(2026, 8, 31, 6, 45, 0, 0, time.UTC)
+	server := New(dataStore, testOptions(
+		&now, tokenQueue(tokenFixture(4), tokenFixture(5))))
+
+	for _, path := range []string{"/", "/assets/dashboard.css", "/assets/dashboard.js", "/assets/RightMenuCheck.png"} {
+		response := perform(
+			server.Handler(), http.MethodGet, path, "", "", "127.0.0.1:1", "")
+		if response.Code != http.StatusOK || response.Body.Len() == 0 {
+			t.Fatalf("dashboard asset %s = %d, %d bytes", path, response.Code, response.Body.Len())
+		}
+		if response.Header().Get("Content-Security-Policy") == "" {
+			t.Fatalf("dashboard asset %s lacks CSP", path)
+		}
+	}
+	dashboard := perform(server.Handler(), http.MethodGet, "/", "", "", "127.0.0.1:1", "")
+	if !strings.Contains(dashboard.Body.String(), "deviceRows") ||
+		strings.Contains(dashboard.Body.String(), testMachineLower) {
+		t.Fatalf("unexpected dashboard shell: %s", dashboard.Body.String())
+	}
+
+	first := perform(
+		server.Handler(), http.MethodPost, startPath, validBody,
+		"application/json", "203.0.113.1:1", "")
+	if first.Code != http.StatusOK {
+		t.Fatalf("first start = %d, %s", first.Code, first.Body.String())
+	}
+	secondBody := `{"machineId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","sessionId":"` + testSessionB + `"}`
+	second := perform(
+		server.Handler(), http.MethodPost, startPath, secondBody,
+		"application/json", "203.0.113.1:1", "")
+	if second.Code != http.StatusOK {
+		t.Fatalf("second start = %d, %s", second.Code, second.Body.String())
+	}
+
+	summary := perform(
+		server.Handler(), http.MethodGet, "/v1/admin/summary", "", "",
+		"127.0.0.1:1", "Bearer "+adminToken)
+	var overview summaryResponse
+	if err := json.Unmarshal(summary.Body.Bytes(), &overview); err != nil {
+		t.Fatal(err)
+	}
+	if overview.MachineCount != 2 || overview.ActiveMachineCount != 2 ||
+		overview.ActiveSessionCount != 2 {
+		t.Fatalf("dashboard summary = %#v", overview)
+	}
+
+	machines := perform(
+		server.Handler(), http.MethodGet, "/v1/admin/machines", "", "",
+		"127.0.0.1:1", "Bearer "+adminToken)
+	if machines.Code != http.StatusOK || !strings.Contains(machines.Body.String(), "activeSessionCount") ||
+		!strings.Contains(machines.Body.String(), "lastSeenAtUtc") {
+		t.Fatalf("machine response = %d, %s", machines.Code, machines.Body.String())
+	}
+
+	sessions := perform(
+		server.Handler(), http.MethodGet,
+		"/v1/admin/sessions?machineId="+testMachineLower, "", "",
+		"127.0.0.1:1", "Bearer "+adminToken)
+	if sessions.Code != http.StatusOK || !strings.Contains(sessions.Body.String(), testMachineLower) ||
+		strings.Contains(sessions.Body.String(), strings.Repeat("b", 64)) {
+		t.Fatalf("filtered sessions = %d, %s", sessions.Code, sessions.Body.String())
+	}
+	invalid := perform(
+		server.Handler(), http.MethodGet, "/v1/admin/sessions?machineId=invalid", "", "",
+		"127.0.0.1:1", "Bearer "+adminToken)
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("invalid machine filter = %d", invalid.Code)
 	}
 }
 

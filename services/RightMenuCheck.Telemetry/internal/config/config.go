@@ -40,7 +40,7 @@ func Load() (Config, error) {
 		ListenAddress:        valueOrDefault("RMC_TELEMETRY_LISTEN_ADDRESS", defaultListenAddress),
 		DatabasePath:         valueOrDefault("RMC_TELEMETRY_DATABASE_PATH", defaultDatabasePath),
 		AdminToken:           os.Getenv("RMC_TELEMETRY_ADMIN_TOKEN"),
-		SessionTimeout:       3 * time.Minute,
+		SessionTimeout:       7 * time.Minute,
 		ClosedSessionTTL:     7 * 24 * time.Hour,
 		SweepInterval:        30 * time.Second,
 		HandlerTimeout:       5 * time.Second,

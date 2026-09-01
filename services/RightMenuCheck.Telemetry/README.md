@@ -78,6 +78,8 @@ Authorization: Bearer <sessionToken>
 
 Success is 204. A missing, malformed, forged, rotated, or wrong-machine token returns 401. Token digests are compared in constant time.
 
+The RightMenuCheck desktop client sends a heartbeat every two minutes. The default seven-minute stale-session timeout tolerates a missed heartbeat without immediately marking the device offline.
+
 ### Resume
 
 POST /v1/telemetry/resume
@@ -147,9 +149,9 @@ Common error codes:
 
 | Method | Path | Result |
 | --- | --- | --- |
-| GET | /v1/admin/summary | durable startup, segment, exit, and duration totals |
-| GET | /v1/admin/machines?limit=100&offset=0 | hashed machine IDs and durable aggregates |
-| GET | /v1/admin/sessions?limit=100&offset=0 | retained raw session timing rows, without token data |
+| GET | /v1/admin/summary | device, online-device, startup, segment, exit, and duration totals |
+| GET | /v1/admin/machines?limit=100&offset=0 | hashed machine IDs, online state, and durable aggregates |
+| GET | /v1/admin/sessions?machineId=...&limit=100&offset=0 | retained timing history, optionally filtered by device |
 
 Management requests require:
 
@@ -167,6 +169,10 @@ RMC_TELEMETRY_ALLOW_UNAUTHENTICATED_LOOPBACK_ADMIN=true
 
 This switch never authorizes non-loopback clients. If an admin token is configured, the token remains required even when the switch is true.
 
+## Management dashboard
+
+GET / serves the embedded management dashboard. The static shell contains no device data. An operator enters the admin token, which is retained only in browser session storage and sent as the Bearer header for management API requests. The dashboard shows total and online devices, active sessions, startup count, total duration, and a device table. Selecting a device loads its retained session history with start, last-heartbeat, end, duration, and exit state.
+
 GET /health reports only {"status":"ok"} when SQLite is reachable.
 
 ## Configuration
@@ -177,7 +183,7 @@ GET /health reports only {"status":"ok"} when SQLite is reachable.
 | RMC_TELEMETRY_DATABASE_PATH | data/telemetry.db | SQLite database location |
 | RMC_TELEMETRY_ADMIN_TOKEN | none, required | Management bearer token, at least 32 characters |
 | RMC_TELEMETRY_ALLOW_UNAUTHENTICATED_LOOPBACK_ADMIN | false | Explicit integration-test-only bypass |
-| RMC_TELEMETRY_SESSION_TIMEOUT | 3m | Time without heartbeat before abnormal settlement |
+| RMC_TELEMETRY_SESSION_TIMEOUT | 7m | Time without heartbeat before abnormal settlement |
 | RMC_TELEMETRY_CLOSED_SESSION_TTL | 168h | Raw closed-session retention |
 | RMC_TELEMETRY_SWEEP_INTERVAL | 30s | Background maintenance interval |
 | RMC_TELEMETRY_HANDLER_TIMEOUT | 5s | Request and database operation deadline |
