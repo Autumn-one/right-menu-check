@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"rightmenucheck.local/telemetry/internal/api"
+	"rightmenucheck.local/telemetry/internal/buildinfo"
 	"rightmenucheck.local/telemetry/internal/cleanup"
 	"rightmenucheck.local/telemetry/internal/config"
 	"rightmenucheck.local/telemetry/internal/logging"
@@ -20,6 +22,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Println(buildinfo.Version)
+		return
+	}
+
 	logger := logging.New(os.Stdout, "rightmenucheck-telemetry: ", log.Ldate|log.Ltime|log.LUTC, 64)
 	if err := run(logger); err != nil {
 		logger.Print("service stopped due to an unrecoverable error")

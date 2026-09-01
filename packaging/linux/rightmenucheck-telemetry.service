@@ -1,0 +1,28 @@
+[Unit]
+Description=RightMenuCheck Telemetry Service
+After=network.target
+
+[Service]
+Type=simple
+User=rightmenucheck-telemetry
+Group=rightmenucheck-telemetry
+EnvironmentFile=/etc/rightmenucheck-telemetry/environment
+ExecStart=/usr/local/bin/rightmenucheck-telemetry
+Restart=on-failure
+RestartSec=2s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/rightmenucheck-telemetry
+
+[Install]
+WantedBy=multi-user.target

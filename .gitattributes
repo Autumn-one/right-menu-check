@@ -10,3 +10,5 @@
 *.md text eol=crlf
 *.editorconfig text eol=crlf
 *.gitignore text eol=crlf
+*.sh text eol=lf
+packaging/linux/* text eol=lf

@@ -214,3 +214,29 @@ $env:RMC_TELEMETRY_ADMIN_TOKEN = [Convert]::ToHexString(
 ~~~
 
 Stop the process with Ctrl+C or the service manager termination signal. The HTTP server drains in-flight requests, cleanup stops before SQLite closes, and asynchronous logging has a bounded shutdown wait.
+
+## Linux package and installation
+
+Release packages are built for Linux amd64 and arm64 from the repository root:
+
+~~~powershell
+pwsh -NoLogo -NoProfile -File .\scripts\build-telemetry-packages.ps1 -Version 0.1.1
+~~~
+
+The builder emits a static binary archive, SHA-256 file, and ECDSA signature for each architecture under `artifacts/packages/telemetry`. The installer verifies the signature with the embedded distribution public key before trusting the checksum or extracting the archive.
+
+Install the current release on the telemetry server with:
+
+~~~sh
+curl -fsSL https://raw.githubusercontent.com/Autumn-one/right-menu-check/main/scripts/install-telemetry.sh | sudo env RMC_TELEMETRY_SERVER_NAME=43.159.148.243 bash
+~~~
+
+The installer creates a dedicated system user, a protected environment file, a hardened systemd unit, and an Nginx reverse proxy. The generated management token remains in `/etc/rightmenucheck-telemetry/environment` and is preserved during upgrades.
+
+Plain HTTP exposes only telemetry ingestion and `/health`. The dashboard and management API remain loopback-only by default. Use an SSH tunnel for administration:
+
+~~~sh
+ssh -L 8787:127.0.0.1:8787 root@43.159.148.243
+~~~
+
+Then open `http://127.0.0.1:8787/`. A public management dashboard requires TLS plus an explicit `RMC_TELEMETRY_ADMIN_ALLOW` IP or CIDR.
