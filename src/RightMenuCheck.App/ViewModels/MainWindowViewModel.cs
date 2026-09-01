@@ -30,6 +30,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 {
     private readonly IContextMenuDataService _dataService;
     private readonly IContextMenuManagementService _managementService;
+    private readonly IWindowsContextMenuModeService _windowsContextMenuModeService;
     private CancellationTokenSource? _operationCancellation;
     private MenuCategoryFilter _selectedCategory;
     private string _searchText = string.Empty;
@@ -37,6 +38,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private bool _onlyEnabled;
     private bool _includeStaticCommands;
     private bool _isBusy;
+    private bool _operationCanCancel;
     private string _statusText = "准备扫描";
     private int _progressValue;
     private int _progressMaximum = 1;
@@ -46,17 +48,29 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private int _issueCount;
     private ContextMenuRowViewModel? _selectedItem;
     private string _aggregateResult = "未测试";
+    private WindowsContextMenuModeStatus _windowsContextMenuModeStatus = new(
+        WindowsContextMenuMode.Unsupported,
+        CanChange: false,
+        "尚未读取系统右键菜单模式。",
+        WindowsBuild: 0,
+        RegistryViewKind.Registry64);
+    private bool _explorerRestartRequired;
 
     public MainWindowViewModel(
         IContextMenuDataService dataService,
-        IContextMenuManagementService managementService)
+        IContextMenuManagementService managementService,
+        IWindowsContextMenuModeService windowsContextMenuModeService)
     {
         _dataService = dataService ?? throw new ArgumentNullException(nameof(dataService));
         _managementService = managementService ??
                              throw new ArgumentNullException(nameof(managementService));
+        _windowsContextMenuModeService = windowsContextMenuModeService ??
+                                         throw new ArgumentNullException(
+                                             nameof(windowsContextMenuModeService));
         ItemsView = CollectionViewSource.GetDefaultView(Items);
         ItemsView.Filter = FilterItem;
         ApplyDefaultSort();
+        RefreshWindowsContextMenuStatus();
     }
 
     public ObservableCollection<ContextMenuRowViewModel> Items { get; } = [];
@@ -144,13 +158,15 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             {
                 OnPropertyChanged(nameof(CanStart));
                 OnPropertyChanged(nameof(CanCancel));
+                OnPropertyChanged(nameof(CanChangeWindowsContextMenuMode));
+                OnPropertyChanged(nameof(CanRestartExplorer));
             }
         }
     }
 
     public bool CanStart => !IsBusy;
 
-    public bool CanCancel => IsBusy;
+    public bool CanCancel => IsBusy && _operationCanCancel;
 
     public string StatusText
     {
@@ -216,6 +232,40 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         get => _aggregateResult;
         private set => SetProperty(ref _aggregateResult, value);
     }
+
+    public bool UseWindows11ContextMenu =>
+        _windowsContextMenuModeStatus.Mode == WindowsContextMenuMode.Windows11;
+
+    public bool CanChangeWindowsContextMenuMode =>
+        !IsBusy && _windowsContextMenuModeStatus.CanChange;
+
+    public string WindowsContextMenuModeLabel => _windowsContextMenuModeStatus.Mode switch
+    {
+        WindowsContextMenuMode.Windows11 => "Windows 11 简洁菜单",
+        WindowsContextMenuMode.Classic => "经典完整菜单",
+        WindowsContextMenuMode.Custom => "检测到自定义模式",
+        _ => "当前系统不支持",
+    };
+
+    public string WindowsContextMenuModeDetail => _explorerRestartRequired
+        ? $"{_windowsContextMenuModeStatus.Detail} 已更改，等待重启 Explorer 生效。"
+        : _windowsContextMenuModeStatus.Detail;
+
+    public bool ExplorerRestartRequired
+    {
+        get => _explorerRestartRequired;
+        private set
+        {
+            if (SetProperty(ref _explorerRestartRequired, value))
+            {
+                OnPropertyChanged(nameof(WindowsContextMenuModeDetail));
+                OnPropertyChanged(nameof(CanRestartExplorer));
+            }
+        }
+    }
+
+    public bool CanRestartExplorer =>
+        !IsBusy && _windowsContextMenuModeStatus.CanChange;
 
     public async Task ScanAsync()
     {
@@ -399,6 +449,111 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     public void Cancel() => _operationCancellation?.Cancel();
+
+    public WindowsContextMenuModePlan PreviewWindowsContextMenuMode(
+        bool useWindows11Mode) => _windowsContextMenuModeService.Preview(
+        useWindows11Mode
+            ? WindowsContextMenuMode.Windows11
+            : WindowsContextMenuMode.Classic);
+
+    public void RefreshWindowsContextMenuStatus()
+    {
+        try
+        {
+            SetWindowsContextMenuModeStatus(_windowsContextMenuModeService.GetStatus());
+        }
+        catch (Exception exception) when (exception is
+                                           UnauthorizedAccessException or
+                                           SecurityException or
+                                           IOException or
+                                           InvalidOperationException)
+        {
+            SetWindowsContextMenuModeStatus(new WindowsContextMenuModeStatus(
+                WindowsContextMenuMode.Unsupported,
+                CanChange: false,
+                $"无法读取系统右键菜单模式：{exception.Message}",
+                WindowsBuild: 0,
+                RegistryViewKind.Registry64));
+        }
+    }
+
+    public async Task<WindowsContextMenuModeChangeResult?> ApplyWindowsContextMenuModeAsync(
+        bool useWindows11Mode)
+    {
+        if (IsBusy)
+        {
+            return null;
+        }
+
+        var target = useWindows11Mode
+            ? WindowsContextMenuMode.Windows11
+            : WindowsContextMenuMode.Classic;
+        BeginOperation("正在更新系统右键菜单模式…");
+        WindowsContextMenuModeChangeResult? result = null;
+        try
+        {
+            result = await _windowsContextMenuModeService.ApplyAsync(
+                target,
+                _operationCancellation!.Token);
+            SetWindowsContextMenuModeStatus(result.Status);
+            ExplorerRestartRequired = result.Succeeded && !result.IsNoChange;
+            StatusText = result.Message;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "右键菜单模式更改已取消";
+        }
+        catch (Exception exception) when (exception is
+                                           UnauthorizedAccessException or
+                                           SecurityException or
+                                           IOException or
+                                           InvalidOperationException)
+        {
+            StatusText = $"更改失败：{exception.Message}";
+            RefreshWindowsContextMenuStatus();
+        }
+        finally
+        {
+            EndOperation();
+        }
+
+        return result;
+    }
+
+    public async Task<ExplorerRestartResult?> RestartExplorerAsync()
+    {
+        if (IsBusy)
+        {
+            return null;
+        }
+
+        BeginOperation("正在重启 Explorer…", canCancel: false);
+        ExplorerRestartResult? result = null;
+        try
+        {
+            result = await _windowsContextMenuModeService.RestartExplorerAsync(
+                CancellationToken.None);
+            ExplorerRestartRequired = !result.Succeeded;
+            StatusText = result.Message;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "Explorer 重启已取消";
+        }
+        catch (Exception exception) when (exception is
+                                           InvalidOperationException or
+                                           Win32Exception or
+                                           IOException)
+        {
+            StatusText = $"Explorer 重启失败：{exception.Message}";
+        }
+        finally
+        {
+            EndOperation();
+        }
+
+        return result;
+    }
 
     public ContextMenuStatePlan? PreviewSelectedState()
     {
@@ -814,10 +969,11 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _ => Path.GetTempPath(),
     };
 
-    private void BeginOperation(string status)
+    private void BeginOperation(string status, bool canCancel = true)
     {
         _operationCancellation?.Dispose();
         _operationCancellation = new CancellationTokenSource();
+        _operationCanCancel = canCancel;
         IsBusy = true;
         ProgressValue = 0;
         ProgressMaximum = 1;
@@ -827,6 +983,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private void EndOperation()
     {
         IsBusy = false;
+        _operationCanCancel = false;
         _operationCancellation?.Dispose();
         _operationCancellation = null;
     }
@@ -868,5 +1025,14 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     {
         StatusText = $"操作失败：{exception.Message}";
         IssueCount++;
+    }
+
+    private void SetWindowsContextMenuModeStatus(WindowsContextMenuModeStatus status)
+    {
+        _windowsContextMenuModeStatus = status;
+        OnPropertyChanged(nameof(UseWindows11ContextMenu));
+        OnPropertyChanged(nameof(CanChangeWindowsContextMenuMode));
+        OnPropertyChanged(nameof(WindowsContextMenuModeLabel));
+        OnPropertyChanged(nameof(WindowsContextMenuModeDetail));
     }
 }

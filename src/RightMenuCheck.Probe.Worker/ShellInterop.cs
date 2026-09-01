@@ -10,6 +10,16 @@ internal static partial class ShellInterop
     public const int NoInterface = unchecked((int)0x80004002);
     public const int NotImplemented = unchecked((int)0x80004001);
     public const int FalseResult = 1;
+    public const uint MenuItemMaskState = 0x00000001;
+    public const uint MenuItemMaskId = 0x00000002;
+    public const uint MenuItemMaskSubmenu = 0x00000004;
+    public const uint MenuItemMaskString = 0x00000040;
+    public const uint MenuItemMaskType = 0x00000100;
+    public const uint MenuItemTypeOwnerDrawn = 0x00000100;
+    public const uint MenuItemTypeSeparator = 0x00000800;
+    public const uint MenuItemStateDisabled = 0x00000003;
+    public const uint GetCommandStringVerbUnicode = 0x00000004;
+    public const uint GetCommandStringHelpUnicode = 0x00000005;
 
     public static readonly Guid DataObjectInterfaceId =
         new("0000010E-0000-0000-C000-000000000046");
@@ -81,6 +91,17 @@ internal static partial class ShellInterop
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool DestroyMenu(IntPtr menu);
 
+    [LibraryImport("user32.dll", SetLastError = true)]
+    public static partial int GetMenuItemCount(IntPtr menu);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetMenuItemInfoW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetMenuItemInfo(
+        IntPtr menu,
+        uint item,
+        [MarshalAs(UnmanagedType.Bool)] bool byPosition,
+        ref MenuItemInfo menuItemInfo);
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct DefaultContextMenu
     {
@@ -93,6 +114,23 @@ internal static partial class ShellInterop
         public IntPtr AssociationInfo;
         public uint KeyCount;
         public IntPtr Keys;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MenuItemInfo
+    {
+        public uint Size;
+        public uint Mask;
+        public uint Type;
+        public uint State;
+        public uint Id;
+        public IntPtr Submenu;
+        public IntPtr CheckedBitmap;
+        public IntPtr UncheckedBitmap;
+        public UIntPtr ItemData;
+        public IntPtr TypeData;
+        public uint CharacterCount;
+        public IntPtr ItemBitmap;
     }
 }
 

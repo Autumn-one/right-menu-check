@@ -9,7 +9,11 @@ internal static class ShellProbeExecutor
 {
     private const uint ClassContext =
         ShellInterop.ClassContextInProcessServer | ShellInterop.ClassContextLocalServer;
-    private const uint MaximumSubCommands = 256;
+    private const uint FirstCommandId = 1;
+    private const uint LastCommandId = 0x7FFF;
+    private const int MaximumMenuDepth = 8;
+    private const int MaximumMenuItems = 256;
+    private const int MaximumMenuTextCharacters = 1024;
 
     public static ProbeResponse Execute(ProbeRequest request)
     {
@@ -112,6 +116,7 @@ internal static class ShellProbeExecutor
     {
         using var targetContext = ShellTargetContext.CreateClassic(request);
         var phases = new List<ProbePhaseTiming>();
+        ProbeMenuSnapshot? menuSnapshot = null;
         IContextMenu? contextMenu = null;
 
         try
@@ -178,8 +183,8 @@ internal static class ShellProbeExecutor
                 var construction = Measure(() => contextMenu.QueryContextMenu(
                     menu,
                     indexMenu: 0,
-                    firstCommandId: 1,
-                    lastCommandId: 0x7FFF,
+                    firstCommandId: FirstCommandId,
+                    lastCommandId: LastCommandId,
                     flags: 0));
                 phases.Add(CreatePhase(ProbePhase.MenuConstruction, construction));
                 if (construction.HResult < 0)
@@ -193,6 +198,8 @@ internal static class ShellProbeExecutor
                         "IContextMenu.QueryContextMenu",
                         construction.HResult);
                 }
+
+                menuSnapshot = CaptureClassicMenu(contextMenu, menu, construction.HResult);
             }
             finally
             {
@@ -200,7 +207,12 @@ internal static class ShellProbeExecutor
             }
 
             totalStopwatch.Stop();
-            return CreateSuccess(request, startedAt, totalStopwatch.Elapsed, phases);
+            return CreateSuccess(
+                request,
+                startedAt,
+                totalStopwatch.Elapsed,
+                phases,
+                menuSnapshot);
         }
         finally
         {
@@ -233,11 +245,16 @@ internal static class ShellProbeExecutor
                     activation.HResult);
             }
 
+            string? commandTitle = null;
             var titlePointer = IntPtr.Zero;
             var title = Measure(() => command.GetTitle(targetContext.ItemArray, out titlePointer));
             try
             {
                 phases.Add(CreatePhase(ProbePhase.GetTitle, title));
+                if (title.HResult >= 0 && titlePointer != IntPtr.Zero)
+                {
+                    commandTitle = NormalizeMenuText(Marshal.PtrToStringUni(titlePointer));
+                }
             }
             finally
             {
@@ -267,10 +284,11 @@ internal static class ShellProbeExecutor
                 Marshal.FreeCoTaskMem(iconPointer);
             }
 
+            uint commandState = 0;
             var state = Measure(() => command.GetState(
                 targetContext.ItemArray,
                 allowSlowOperations: false,
-                out _));
+                out commandState));
             phases.Add(CreatePhase(ProbePhase.GetState, state));
             if (state.HResult < 0)
             {
@@ -284,14 +302,43 @@ internal static class ShellProbeExecutor
                     state.HResult);
             }
 
-            var enumeration = Measure(() => EnumerateSubCommands(command));
+            var capture = new MenuCaptureState();
+            capture.Items.Add(new ProbeMenuItem(
+                ProbeMenuItemKind.Command,
+                commandTitle,
+                Depth: 0,
+                CommandId: null,
+                CanonicalVerb: ReadExplorerCanonicalVerb(command),
+                HelpText: ReadExplorerTooltip(command, targetContext.ItemArray),
+                IsDisabled: (commandState & 0x1) != 0,
+                IsHidden: (commandState & 0x2) != 0));
+            var enumeration = Measure(() => EnumerateSubCommands(
+                command,
+                targetContext.ItemArray,
+                capture,
+                depth: 1));
             phases.Add(CreatePhase(
                 ProbePhase.EnumerateSubCommands,
                 enumeration,
                 optionalNotImplemented: true));
+            if (capture.Items.Count > 1)
+            {
+                capture.Items[0] = capture.Items[0] with { Kind = ProbeMenuItemKind.Submenu };
+            }
+
+            var menuSnapshot = new ProbeMenuSnapshot(
+                capture.Items.Count,
+                capture.Items.ToArray(),
+                capture.Truncated,
+                capture.Limitation);
 
             totalStopwatch.Stop();
-            return CreateSuccess(request, startedAt, totalStopwatch.Elapsed, phases);
+            return CreateSuccess(
+                request,
+                startedAt,
+                totalStopwatch.Elapsed,
+                phases,
+                menuSnapshot);
         }
         finally
         {
@@ -306,6 +353,7 @@ internal static class ShellProbeExecutor
     {
         using var target = DefaultContextMenuTarget.Create(request);
         var phases = new List<ProbePhaseTiming>();
+        ProbeMenuSnapshot? menuSnapshot = null;
         IContextMenu? contextMenu = null;
 
         try
@@ -342,8 +390,8 @@ internal static class ShellProbeExecutor
                 var construction = Measure(() => contextMenu.QueryContextMenu(
                     menu,
                     indexMenu: 0,
-                    firstCommandId: 1,
-                    lastCommandId: 0x7FFF,
+                    firstCommandId: FirstCommandId,
+                    lastCommandId: LastCommandId,
                     flags: 0));
                 phases.Add(CreatePhase(ProbePhase.MenuConstruction, construction));
                 if (construction.HResult < 0)
@@ -357,6 +405,8 @@ internal static class ShellProbeExecutor
                         "IContextMenu.QueryContextMenu",
                         construction.HResult);
                 }
+
+                menuSnapshot = CaptureClassicMenu(contextMenu, menu, construction.HResult);
             }
             finally
             {
@@ -364,7 +414,12 @@ internal static class ShellProbeExecutor
             }
 
             totalStopwatch.Stop();
-            return CreateSuccess(request, startedAt, totalStopwatch.Elapsed, phases);
+            return CreateSuccess(
+                request,
+                startedAt,
+                totalStopwatch.Elapsed,
+                phases,
+                menuSnapshot);
         }
         finally
         {
@@ -404,8 +459,169 @@ internal static class ShellProbeExecutor
         }
     }
 
-    private static int EnumerateSubCommands(IExplorerCommand command)
+    private static ProbeMenuSnapshot CaptureClassicMenu(
+        IContextMenu contextMenu,
+        IntPtr menu,
+        int queryResult)
     {
+        var capture = new MenuCaptureState();
+        EnumerateNativeMenu(contextMenu, menu, depth: 0, capture);
+        return new ProbeMenuSnapshot(
+            queryResult & 0xFFFF,
+            capture.Items.ToArray(),
+            capture.Truncated,
+            capture.Limitation);
+    }
+
+    private static void EnumerateNativeMenu(
+        IContextMenu contextMenu,
+        IntPtr menu,
+        int depth,
+        MenuCaptureState capture)
+    {
+        if (depth > MaximumMenuDepth)
+        {
+            capture.MarkPartial($"Menu depth exceeded {MaximumMenuDepth}.");
+            return;
+        }
+
+        var count = ShellInterop.GetMenuItemCount(menu);
+        if (count < 0)
+        {
+            capture.MarkPartial(
+                $"GetMenuItemCount failed at depth {depth} with Win32 error " +
+                $"{Marshal.GetLastWin32Error()}.");
+            return;
+        }
+
+        for (var position = 0; position < count; position++)
+        {
+            if (capture.Items.Count >= MaximumMenuItems)
+            {
+                capture.MarkPartial($"Menu item count exceeded {MaximumMenuItems}.");
+                return;
+            }
+
+            var textBuffer = Marshal.AllocHGlobal(MaximumMenuTextCharacters * sizeof(char));
+            try
+            {
+                var info = new ShellInterop.MenuItemInfo
+                {
+                    Size = (uint)Marshal.SizeOf<ShellInterop.MenuItemInfo>(),
+                    Mask = ShellInterop.MenuItemMaskState |
+                           ShellInterop.MenuItemMaskId |
+                           ShellInterop.MenuItemMaskSubmenu |
+                           ShellInterop.MenuItemMaskType,
+                };
+                if (!ShellInterop.GetMenuItemInfo(
+                        menu,
+                        (uint)position,
+                        byPosition: true,
+                        ref info))
+                {
+                    capture.MarkPartial(
+                        $"GetMenuItemInfo failed at depth {depth}, position {position}, " +
+                        $"with Win32 error {Marshal.GetLastWin32Error()}.");
+                    continue;
+                }
+
+                var isSeparator = (info.Type & ShellInterop.MenuItemTypeSeparator) != 0;
+                var isOwnerDrawn = (info.Type & ShellInterop.MenuItemTypeOwnerDrawn) != 0;
+                var hasSubmenu = info.Submenu != IntPtr.Zero;
+                var kind = isSeparator
+                    ? ProbeMenuItemKind.Separator
+                    : hasSubmenu
+                        ? ProbeMenuItemKind.Submenu
+                        : isOwnerDrawn
+                            ? ProbeMenuItemKind.OwnerDrawn
+                            : ProbeMenuItemKind.Command;
+                string? title = null;
+                if (!isSeparator && !isOwnerDrawn)
+                {
+                    Marshal.WriteInt16(textBuffer, 0);
+                    info.Mask = ShellInterop.MenuItemMaskString;
+                    info.TypeData = textBuffer;
+                    info.CharacterCount = MaximumMenuTextCharacters;
+                    if (ShellInterop.GetMenuItemInfo(
+                            menu,
+                            (uint)position,
+                            byPosition: true,
+                            ref info))
+                    {
+                        title = NormalizeMenuText(Marshal.PtrToStringUni(textBuffer));
+                    }
+                }
+                uint? commandId = !isSeparator && info.Id is >= FirstCommandId and <= LastCommandId
+                    ? info.Id
+                    : null;
+                var commandOffset = commandId is null ? null : commandId - FirstCommandId;
+                capture.Items.Add(new ProbeMenuItem(
+                    kind,
+                    title,
+                    depth,
+                    commandId,
+                    commandOffset is null
+                        ? null
+                        : ReadContextMenuString(
+                            contextMenu,
+                            commandOffset.Value,
+                            ShellInterop.GetCommandStringVerbUnicode),
+                    commandOffset is null
+                        ? null
+                        : ReadContextMenuString(
+                            contextMenu,
+                            commandOffset.Value,
+                            ShellInterop.GetCommandStringHelpUnicode),
+                    IsDisabled: (info.State & ShellInterop.MenuItemStateDisabled) != 0,
+                    IsHidden: false));
+
+                if (hasSubmenu)
+                {
+                    EnumerateNativeMenu(contextMenu, info.Submenu, depth + 1, capture);
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(textBuffer);
+            }
+        }
+    }
+
+    private static string? ReadContextMenuString(
+        IContextMenu contextMenu,
+        uint commandOffset,
+        uint stringType)
+    {
+        var buffer = Marshal.AllocHGlobal(MaximumMenuTextCharacters * sizeof(char));
+        try
+        {
+            Marshal.WriteInt16(buffer, 0);
+            var result = contextMenu.GetCommandString(
+                (UIntPtr)commandOffset,
+                stringType,
+                reserved: IntPtr.Zero,
+                buffer,
+                MaximumMenuTextCharacters);
+            return result < 0 ? null : NormalizeMenuText(Marshal.PtrToStringUni(buffer));
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    private static int EnumerateSubCommands(
+        IExplorerCommand command,
+        IShellItemArray? itemArray,
+        MenuCaptureState capture,
+        int depth)
+    {
+        if (depth > MaximumMenuDepth)
+        {
+            capture.MarkPartial($"Explorer command depth exceeded {MaximumMenuDepth}.");
+            return 0;
+        }
+
         var result = command.EnumSubCommands(out var enumerator);
         if (result < 0 || enumerator is null)
         {
@@ -414,7 +630,7 @@ internal static class ShellProbeExecutor
 
         try
         {
-            for (uint index = 0; index < MaximumSubCommands; index++)
+            while (capture.Items.Count < MaximumMenuItems)
             {
                 var nextResult = enumerator.Next(1, out var childCommand, out var fetched);
                 try
@@ -428,6 +644,47 @@ internal static class ShellProbeExecutor
                     {
                         return nextResult;
                     }
+
+                    if (childCommand is null)
+                    {
+                        continue;
+                    }
+
+                    uint childState = 0;
+                    _ = childCommand.GetState(
+                        itemArray,
+                        allowSlowOperations: false,
+                        out childState);
+                    var itemIndex = capture.Items.Count;
+                    capture.Items.Add(new ProbeMenuItem(
+                        ProbeMenuItemKind.Command,
+                        ReadExplorerTitle(childCommand, itemArray),
+                        depth,
+                        CommandId: null,
+                        CanonicalVerb: ReadExplorerCanonicalVerb(childCommand),
+                        HelpText: ReadExplorerTooltip(childCommand, itemArray),
+                        IsDisabled: (childState & 0x1) != 0,
+                        IsHidden: (childState & 0x2) != 0));
+                    var childResult = EnumerateSubCommands(
+                        childCommand,
+                        itemArray,
+                        capture,
+                        depth + 1);
+                    if (capture.Items.Count > itemIndex + 1)
+                    {
+                        capture.Items[itemIndex] = capture.Items[itemIndex] with
+                        {
+                            Kind = ProbeMenuItemKind.Submenu,
+                        };
+                    }
+
+                    if (childResult < 0 && childResult != ShellInterop.NotImplemented)
+                    {
+                        capture.MarkPartial(
+                            $"IExplorerCommand.EnumSubCommands failed with HRESULT " +
+                            $"0x{unchecked((uint)childResult):X8}.");
+                        return childResult;
+                    }
                 }
                 finally
                 {
@@ -435,6 +692,7 @@ internal static class ShellProbeExecutor
                 }
             }
 
+            capture.MarkPartial($"Explorer command count exceeded {MaximumMenuItems}.");
             return 0;
         }
         finally
@@ -442,6 +700,48 @@ internal static class ShellProbeExecutor
             ShellTargetContext.ReleaseComObject(enumerator);
         }
     }
+
+    private static string? ReadExplorerTitle(
+        IExplorerCommand command,
+        IShellItemArray? itemArray)
+    {
+        var pointer = IntPtr.Zero;
+        try
+        {
+            return command.GetTitle(itemArray, out pointer) < 0 || pointer == IntPtr.Zero
+                ? null
+                : NormalizeMenuText(Marshal.PtrToStringUni(pointer));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pointer);
+        }
+    }
+
+    private static string? ReadExplorerTooltip(
+        IExplorerCommand command,
+        IShellItemArray? itemArray)
+    {
+        var pointer = IntPtr.Zero;
+        try
+        {
+            return command.GetToolTip(itemArray, out pointer) < 0 || pointer == IntPtr.Zero
+                ? null
+                : NormalizeMenuText(Marshal.PtrToStringUni(pointer));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pointer);
+        }
+    }
+
+    private static string? ReadExplorerCanonicalVerb(IExplorerCommand command) =>
+        command.GetCanonicalName(out var canonicalName) < 0 || canonicalName == Guid.Empty
+            ? null
+            : canonicalName.ToString("B").ToUpperInvariant();
+
+    private static string? NormalizeMenuText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static int Activate<T>(string rawClsid, out T? instance)
         where T : class
@@ -493,7 +793,8 @@ internal static class ShellProbeExecutor
         ProbeRequest request,
         DateTimeOffset startedAt,
         TimeSpan duration,
-        IReadOnlyList<ProbePhaseTiming> phases) =>
+        IReadOnlyList<ProbePhaseTiming> phases,
+        ProbeMenuSnapshot? menu) =>
         new(
             ProbeProtocol.CurrentVersion,
             request.RequestId,
@@ -504,6 +805,7 @@ internal static class ShellProbeExecutor
             startedAt,
             duration.TotalMilliseconds,
             phases,
+            menu,
             Error: null);
 
     private static ProbeResponse CreateHResultFailure(
@@ -564,7 +866,23 @@ internal static class ShellProbeExecutor
             startedAt,
             duration.TotalMilliseconds,
             phases,
+            Menu: null,
             new ProbeError(errorType, errorMessage, hResult));
+
+    private sealed class MenuCaptureState
+    {
+        public List<ProbeMenuItem> Items { get; } = [];
+
+        public bool Truncated { get; set; }
+
+        public string? Limitation { get; private set; }
+
+        public void MarkPartial(string limitation)
+        {
+            Truncated = true;
+            Limitation ??= limitation;
+        }
+    }
 
     private readonly record struct TimedHResult(int HResult, double DurationMilliseconds);
 }

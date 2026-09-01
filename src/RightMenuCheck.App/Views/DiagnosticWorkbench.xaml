@@ -69,17 +69,17 @@
             </StackPanel>
           </Button>
           <Button Style="{StaticResource ToolbarButtonStyle}"
-                  AutomationProperties.Name="测试选中项"
-                  AutomationProperties.HelpText="逐项测量所选扩展参与右键菜单构建的耗时，不会执行菜单命令。"
+                  AutomationProperties.Name="隔离探查选中项"
+                  AutomationProperties.HelpText="在隔离进程中构建并读取所选扩展的菜单内容，同时测量耗时；不会执行菜单命令。"
                   IsEnabled="{Binding CanStart}"
                   Click="BenchmarkSelected_Click"
-                  ToolTip="逐项测量所选扩展参与右键菜单构建的耗时；不会执行菜单命令。">
+                  ToolTip="隔离构建并读取菜单标题、动词和帮助文本，同时测量耗时；不会执行菜单命令。">
             <StackPanel Orientation="Horizontal">
               <TextBlock FontFamily="Segoe Fluent Icons"
                          FontSize="14"
                          Text="&#xE768;"
                          Margin="0,0,7,0" />
-              <TextBlock Text="测试选中项" />
+              <TextBlock Text="隔离探查" />
             </StackPanel>
           </Button>
           <Button Style="{StaticResource ToolbarButtonStyle}"
@@ -362,6 +362,10 @@
                               Width="82"
                               Binding="{Binding Architecture, Mode=OneWay}"
                               ElementStyle="{StaticResource CellTextStyle}" />
+          <DataGridTextColumn Header="证据"
+                              Width="112"
+                              Binding="{Binding EvidenceLevel, Mode=OneWay}"
+                              ElementStyle="{StaticResource CellTextStyle}" />
           <DataGridTextColumn Header="中位数"
                               Width="92"
                               Binding="{Binding Median, Mode=OneWay}"
@@ -406,6 +410,36 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
           <StackPanel>
+            <TextBlock Text="系统右键样式"
+                       FontSize="13"
+                       FontWeight="SemiBold" />
+            <CheckBox Content="{Binding WindowsContextMenuModeLabel}"
+                      IsChecked="{Binding UseWindows11ContextMenu, Mode=OneWay}"
+                      IsEnabled="{Binding CanChangeWindowsContextMenuMode}"
+                      AutomationProperties.Name="启用 Windows 11 简洁右键菜单"
+                      Click="WindowsContextMenuMode_Click"
+                      Margin="0,9,0,0" />
+            <TextBlock Text="{Binding WindowsContextMenuModeDetail}"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Margin="0,6,0,0" />
+            <Button Style="{StaticResource ToolbarButtonStyle}"
+                    IsEnabled="{Binding CanRestartExplorer}"
+                    AutomationProperties.Name="重启 Explorer 使右键样式生效"
+                    Click="RestartExplorer_Click"
+                    HorizontalAlignment="Left"
+                    Margin="0,9,0,0">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock FontFamily="Segoe Fluent Icons"
+                           Text="&#xE777;"
+                           Margin="0,0,6,0" />
+                <TextBlock Text="重启 Explorer" />
+              </StackPanel>
+            </Button>
+            <Border BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Margin="0,14,0,12" />
             <TextBlock Text="详情" FontSize="15" FontWeight="SemiBold" />
             <TextBlock Text="{Binding SelectedItem.DisplayName}"
                        FontSize="14"
@@ -460,6 +494,28 @@
                 </StackPanel>
               </Button>
             </WrapPanel>
+            <TextBlock Text="行为说明" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.BehaviorSummary}"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="证据等级" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.EvidenceLevel}"
+                       FontWeight="SemiBold"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="隔离实测菜单" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.ObservedMenuSummary}"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="{Binding SelectedItem.ObservedMenuItems}"
+                       FontFamily="Cascadia Mono, Consolas"
+                       Margin="0,5,0,0"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="排查线索（不是恶意判定）"
+                       Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.RiskSignals}"
+                       Style="{StaticResource DetailValueStyle}" />
+
+            <Border BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Margin="0,18,0,2" />
             <TextBlock Text="所属应用" Style="{StaticResource DetailLabelStyle}" />
             <TextBlock Text="{Binding SelectedItem.OwnerName}" Style="{StaticResource DetailValueStyle}" />
             <TextBlock Text="识别依据" Style="{StaticResource DetailLabelStyle}" />
@@ -473,6 +529,10 @@
             <TextBlock Text="范围 / 类型" Style="{StaticResource DetailLabelStyle}" />
             <TextBlock Text="{Binding SelectedItem.ScopeAndType, Mode=OneWay}"
                        Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="注册名称" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.RegistrationName}"
+                       FontFamily="Cascadia Mono, Consolas"
+                       Style="{StaticResource DetailValueStyle}" />
             <TextBlock Text="CLSID" Style="{StaticResource DetailLabelStyle}" />
             <TextBlock Text="{Binding SelectedItem.HandlerClsid}"
                        FontFamily="Cascadia Mono, Consolas"
@@ -481,10 +541,23 @@
             <TextBlock Text="{Binding SelectedItem.BinaryPath}"
                        FontFamily="Cascadia Mono, Consolas"
                        Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="COM 类名" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.ComClassName}"
+                       Style="{StaticResource DetailValueStyle}" />
             <TextBlock Text="签名" Style="{StaticResource DetailLabelStyle}" />
             <TextBlock Text="{Binding SelectedItem.Signature}"
                        Foreground="{Binding SelectedItem.Signature, Converter={StaticResource StatusBrushConverter}}"
                        TextWrapping="Wrap" />
+            <TextBlock Text="签名主体" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.SignaturePublisher}"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="文件版本" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.FileVersion}"
+                       Style="{StaticResource DetailValueStyle}" />
+            <TextBlock Text="SHA-256" Style="{StaticResource DetailLabelStyle}" />
+            <TextBlock Text="{Binding SelectedItem.Sha256}"
+                       FontFamily="Cascadia Mono, Consolas"
+                       Style="{StaticResource DetailValueStyle}" />
             <TextBlock Text="注册位置" Style="{StaticResource DetailLabelStyle}" />
             <TextBlock Text="{Binding SelectedItem.RegistrationPath}"
                        FontFamily="Cascadia Mono, Consolas"

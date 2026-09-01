@@ -1,3 +1,4 @@
+using System.IO;
 using RightMenuCheck.Core.Inventory;
 using RightMenuCheck.Core.Metadata;
 using RightMenuCheck.Probe.Protocol;
@@ -19,9 +20,15 @@ public sealed class ContextMenuRowViewModel : ObservableObject
 
     public ContextMenuRegistration Registration => Metadata.Registration;
 
-    public string DisplayName => string.IsNullOrWhiteSpace(Registration.DisplayName)
+    public string DisplayName => (string.IsNullOrWhiteSpace(Registration.DisplayName)
         ? Registration.CanonicalName
-        : Registration.DisplayName;
+        : Registration.DisplayName).Trim();
+
+    public string RegistrationName => Registration.CanonicalName.Equals(
+        Registration.CanonicalName.Trim(),
+        StringComparison.Ordinal)
+        ? Registration.CanonicalName
+        : $"{Registration.CanonicalName.Trim()}（原始注册名含空白）";
 
     public string OwnerName => string.IsNullOrWhiteSpace(Metadata.Owner?.DisplayName)
         ? "未知应用"
@@ -40,11 +47,15 @@ public sealed class ContextMenuRowViewModel : ObservableObject
 
     public string BinaryProduct => Metadata.Components
                                        .Select(static component => component.Binary?.ProductName)
-                                       .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ??
+                                       .FirstOrDefault(IsMeaningfulFileDescription) ??
                                    Metadata.Components
                                        .Select(static component => component.Binary?.Description)
-                                       .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ??
-                                   "未提供";
+                                       .FirstOrDefault(IsMeaningfulFileDescription) ??
+                                   (Metadata.Components.Any(static component =>
+                                       IsPlaceholderFileDescription(component.Binary?.ProductName) ||
+                                       IsPlaceholderFileDescription(component.Binary?.Description))
+                                       ? "未提供（文件资源为占位文本）"
+                                       : "未提供");
 
     public string Publisher => Metadata.Owner?.Publisher ??
                                Metadata.Components
@@ -113,6 +124,16 @@ public sealed class ContextMenuRowViewModel : ObservableObject
 
     public string Command => Registration.Command ?? "不适用";
 
+    public string BehaviorSummary => GetBehaviorSummary();
+
+    public string EvidenceLevel => GetEvidenceLevel();
+
+    public string ObservedMenuSummary => GetObservedMenuSummary();
+
+    public string ObservedMenuItems => FormatObservedMenuItems();
+
+    public string RiskSignals => FormatRiskSignals();
+
     public string RegistrationPath => Registration.RegistrationPath;
 
     public string BinaryPath => Metadata.Components
@@ -121,6 +142,29 @@ public sealed class ContextMenuRowViewModel : ObservableObject
                                         component.ComServer?.ResolvedServerPath)
                                     .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ??
                                 "未解析";
+
+    public string ComClassName => Metadata.Components
+                                      .Select(static component => component.ComServer?.DisplayName)
+                                      .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ??
+                                  "未提供";
+
+    public string FileVersion => Metadata.Components
+                                     .Select(static component => component.Binary?.FileVersion)
+                                     .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ??
+                                 "未知";
+
+    public string Sha256 => Metadata.Components
+                                .Select(static component => component.Binary?.Sha256)
+                                .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ??
+                            "未获得";
+
+    public string SignaturePublisher => Metadata.Components
+                                            .Select(static component =>
+                                                component.Binary?.Signature.Subject ??
+                                                component.Binary?.Signature.PublisherName)
+                                            .FirstOrDefault(static value =>
+                                                !string.IsNullOrWhiteSpace(value)) ??
+                                        "未获得";
 
     public string Signature => Metadata.Components
                                    .Select(static component => component.Binary?.Signature.Status)
@@ -187,7 +231,11 @@ public sealed class ContextMenuRowViewModel : ObservableObject
         Scope,
         HandlerClsid,
         RegistrationPath,
-        BinaryPath);
+        BinaryPath,
+        BehaviorSummary,
+        ObservedMenuItems,
+        RiskSignals,
+        Sha256);
 
     public void SetBenchmark(ContextMenuBenchmarkResult benchmark)
     {
@@ -225,7 +273,17 @@ public sealed class ContextMenuRowViewModel : ObservableObject
         OwnerEvidence,
         BinaryProduct,
         TrialSummary,
-        BenchmarkFailureDetails);
+        BenchmarkFailureDetails,
+        RegistrationName,
+        BehaviorSummary,
+        EvidenceLevel,
+        ObservedMenuSummary,
+        ObservedMenuItems,
+        RiskSignals,
+        ComClassName,
+        FileVersion,
+        Sha256,
+        SignaturePublisher);
 
     private void RaiseBenchmarkProperties()
     {
@@ -241,6 +299,11 @@ public sealed class ContextMenuRowViewModel : ObservableObject
         OnPropertyChanged(nameof(Limitation));
         OnPropertyChanged(nameof(TrialSummary));
         OnPropertyChanged(nameof(BenchmarkFailureDetails));
+        OnPropertyChanged(nameof(BehaviorSummary));
+        OnPropertyChanged(nameof(EvidenceLevel));
+        OnPropertyChanged(nameof(ObservedMenuSummary));
+        OnPropertyChanged(nameof(ObservedMenuItems));
+        OnPropertyChanged(nameof(RiskSignals));
     }
 
     private string GetFileTypeScope()
@@ -315,6 +378,308 @@ public sealed class ContextMenuRowViewModel : ObservableObject
             _ => "未知",
         };
     }
+
+    private string GetBehaviorSummary()
+    {
+        var menu = GetRepresentativeMenu();
+        return Registration.Kind switch
+        {
+            ContextMenuRegistrationKind.ClassicContextMenuHandler when menu is { Items.Count: 0 } =>
+                "动态 COM 扩展已加载，但当前样本生成 0 项；功能受文件类型、配置或运行时策略控制。",
+            ContextMenuRegistrationKind.ClassicContextMenuHandler when menu is not null =>
+                $"动态 COM 扩展为当前样本生成 {menu.Items.Count} 个可检查条目。",
+            ContextMenuRegistrationKind.ClassicContextMenuHandler =>
+                "动态 COM 扩展；菜单内容由 DLL 根据所选对象在运行时生成。",
+            ContextMenuRegistrationKind.ExplorerCommand or
+                ContextMenuRegistrationKind.PackagedExplorerCommand when menu is { Items.Count: 0 } =>
+                "Explorer 命令已加载，但当前样本没有可见命令。",
+            ContextMenuRegistrationKind.ExplorerCommand or
+                ContextMenuRegistrationKind.PackagedExplorerCommand when menu is not null =>
+                $"Explorer 命令为当前样本返回 {menu.Items.Count} 个可检查条目。",
+            ContextMenuRegistrationKind.ExplorerCommand or
+                ContextMenuRegistrationKind.PackagedExplorerCommand =>
+                "动态 Explorer 命令；标题和子命令需要通过隔离探查获取。",
+            ContextMenuRegistrationKind.StaticVerb => Registration.Command is null
+                ? "注册表静态菜单，但没有读取到执行命令。"
+                : "注册表直接定义执行命令；只有用户选择该菜单时才会启动。",
+            ContextMenuRegistrationKind.DelegateExecuteVerb =>
+                "选择后交给 DelegateExecute COM 组件执行；安全探查不会调用它。",
+            ContextMenuRegistrationKind.CascadingVerb => Registration.SubCommands.Count == 0
+                ? "注册表级联菜单；子项记录在嵌套注册键中。"
+                : $"注册表级联菜单，声明 {Registration.SubCommands.Count} 个子命令。",
+            _ => "未识别的菜单执行模型。",
+        };
+    }
+
+    private string GetEvidenceLevel()
+    {
+        if (_operationError is not null)
+        {
+            return "探查失败";
+        }
+
+        if (GetRepresentativeMenu() is not null)
+        {
+            return "隔离运行时实测";
+        }
+
+        return Registration.Kind is ContextMenuRegistrationKind.StaticVerb or
+            ContextMenuRegistrationKind.CascadingVerb
+            ? "注册表直接证据"
+            : "注册及文件身份证据";
+    }
+
+    private string GetObservedMenuSummary()
+    {
+        if (_operationError is not null)
+        {
+            return $"未获得运行时菜单：{_operationError}";
+        }
+
+        if (Registration.Kind == ContextMenuRegistrationKind.StaticVerb)
+        {
+            return Registration.Command is null
+                ? "未读取到静态命令。"
+                : "静态命令来自注册表，无需加载第三方 DLL。";
+        }
+
+        if (Registration.Kind == ContextMenuRegistrationKind.DelegateExecuteVerb)
+        {
+            return "为避免执行实际功能，不调用 DelegateExecute。";
+        }
+
+        if (Registration.Kind == ContextMenuRegistrationKind.CascadingVerb)
+        {
+            return "级联结构来自注册表；嵌套子项会作为独立记录显示。";
+        }
+
+        var menu = GetRepresentativeMenu();
+        if (menu is null)
+        {
+            return _benchmark is null
+                ? "尚未隔离探查。"
+                : $"探查结束但未获得菜单快照：{ResultState}";
+        }
+
+        var trialCount = _benchmark!.Trials.Count(static trial =>
+            trial.Outcome == ProbeOutcome.Success && trial.Menu is not null);
+        if (menu.Items.Count == 0)
+        {
+            return $"隔离探查成功 {trialCount} 次：处理器返回 0 个命令 ID，当前样本不会显示菜单。";
+        }
+
+        var truncation = menu.Truncated
+            ? $"；快照不完整：{menu.Limitation ?? "部分内容无法读取"}"
+            : string.Empty;
+        return $"隔离探查成功 {trialCount} 次：捕获 {menu.Items.Count} 个条目，" +
+               $"处理器占用 {menu.CommandIdCount} 个命令 ID{truncation}。";
+    }
+
+    private string FormatObservedMenuItems()
+    {
+        if (Registration.Kind == ContextMenuRegistrationKind.StaticVerb)
+        {
+            return Registration.Command ?? "未读取到命令";
+        }
+
+        if (Registration.Kind == ContextMenuRegistrationKind.CascadingVerb &&
+            Registration.SubCommands.Count > 0)
+        {
+            return string.Join(Environment.NewLine, Registration.SubCommands.Select(static item =>
+                $"- {item}"));
+        }
+
+        var menu = GetRepresentativeMenu();
+        if (menu is null)
+        {
+            return _operationError ?? "尚未探查";
+        }
+
+        if (menu.Items.Count == 0)
+        {
+            return "（当前样本未生成菜单项）";
+        }
+
+        var lines = menu.Items.Select(item =>
+        {
+            var indent = new string(' ', Math.Min(item.Depth, 8) * 2);
+            var title = item.Kind switch
+            {
+                ProbeMenuItemKind.Separator => "────────",
+                ProbeMenuItemKind.OwnerDrawn => "[自绘菜单项，标题不可读取]",
+                _ => item.Title ?? "[标题不可读取]",
+            };
+            var evidence = new List<string>();
+            if (!string.IsNullOrWhiteSpace(item.CanonicalVerb))
+            {
+                evidence.Add($"动词 {SanitizeProbeText(item.CanonicalVerb)}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(item.HelpText))
+            {
+                evidence.Add($"说明 {SanitizeProbeText(item.HelpText)}");
+            }
+
+            if (item.IsDisabled)
+            {
+                evidence.Add("禁用");
+            }
+
+            if (item.IsHidden)
+            {
+                evidence.Add("隐藏");
+            }
+
+            var suffix = evidence.Count == 0 ? string.Empty : $" · {string.Join(" · ", evidence)}";
+            return $"{indent}- {title}{suffix}";
+        }).ToList();
+        if (menu.Truncated)
+        {
+            lines.Add($"- [快照不完整：{menu.Limitation ?? "部分内容无法读取"}]");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private string FormatRiskSignals()
+    {
+        var signals = new List<string>();
+        if (Registration.ClassPath is "*" or "AllFilesystemObjects" ||
+            Registration.TargetKind is ContextMenuTargetKind.Drive or
+                ContextMenuTargetKind.DesktopBackground)
+        {
+            signals.Add($"覆盖范围广：{Scope}");
+        }
+
+        if (!Registration.CanonicalName.Equals(
+                Registration.CanonicalName.Trim(),
+                StringComparison.Ordinal))
+        {
+            signals.Add("注册键名称含前导或尾随空白，降低可识别性");
+        }
+
+        var menu = GetRepresentativeMenu();
+        if (IsDynamicHandler() && menu is { Items.Count: 0 })
+        {
+            signals.Add("动态处理器成功加载，但当前样本生成 0 项");
+        }
+
+        var observedSignatures = _benchmark?.Trials
+            .Where(static trial => trial.Outcome == ProbeOutcome.Success && trial.Menu is not null)
+            .Select(static trial => string.Join('\u001F', trial.Menu!.Items.Select(static item =>
+                $"{item.Depth}:{item.Kind}:{item.Title}:{item.CanonicalVerb}")))
+            .Distinct(StringComparer.Ordinal)
+            .Take(2)
+            .Count() ?? 0;
+        if (observedSignatures > 1)
+        {
+            signals.Add("不同隔离试次返回的菜单内容不一致");
+        }
+
+        var binaries = Metadata.Components
+            .Select(static component => component.Binary)
+            .Where(static binary => binary is not null)
+            .Select(static binary => binary!)
+            .ToArray();
+        if (Metadata.Components.Count > 0 && binaries.Length == 0)
+        {
+            signals.Add("COM 组件未解析到可检查的二进制文件");
+        }
+
+        if (binaries.Any(static binary => !binary.Exists))
+        {
+            signals.Add("注册指向的二进制文件不存在");
+        }
+
+        if (binaries.Any(static binary =>
+                IsPlaceholderFileDescription(binary.ProductName) ||
+                IsPlaceholderFileDescription(binary.Description) ||
+                IsPlaceholderFileDescription(binary.CompanyName)))
+        {
+            signals.Add("二进制版本资源使用占位文本，无法说明真实用途");
+        }
+
+        if (binaries.Any(static binary => binary.Signature.Status is
+                SignatureVerificationStatus.NoSignature or
+                SignatureVerificationStatus.Invalid or
+                SignatureVerificationStatus.Error))
+        {
+            signals.Add("二进制缺少有效 Authenticode 签名");
+        }
+
+        if (binaries.Any(static binary => IsUserWritableLocation(binary.Path)))
+        {
+            signals.Add("处理器二进制位于当前用户可写目录");
+        }
+
+        if (Metadata.Owner is null or
+            { Kind: ApplicationOwnerKind.Unknown } or
+            { Confidence: OwnershipConfidence.None or OwnershipConfidence.Low })
+        {
+            signals.Add("所属应用无法高可信确认");
+        }
+
+        if (_operationError is not null)
+        {
+            signals.Add("隔离探查未成功完成");
+        }
+
+        return signals.Count == 0
+            ? "未命中内置高风险线索；这不等同于安全结论。"
+            : string.Join(Environment.NewLine, signals.Select(static signal => $"- {signal}"));
+    }
+
+    private ProbeMenuSnapshot? GetRepresentativeMenu() => _benchmark?.Trials
+        .Where(static trial => trial.Outcome == ProbeOutcome.Success && trial.Menu is not null)
+        .Select(static trial => trial.Menu!)
+        .OrderByDescending(static menu => menu.Items.Count)
+        .ThenByDescending(static menu => menu.CommandIdCount)
+        .FirstOrDefault();
+
+    private bool IsDynamicHandler() => Registration.Kind is
+        ContextMenuRegistrationKind.ClassicContextMenuHandler or
+        ContextMenuRegistrationKind.ExplorerCommand or
+        ContextMenuRegistrationKind.PackagedExplorerCommand;
+
+    private static bool IsMeaningfulFileDescription(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && !IsPlaceholderFileDescription(value);
+
+    private static bool IsPlaceholderFileDescription(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var text = value.Trim();
+        return text.StartsWith("TODO", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("<产品名>", StringComparison.Ordinal) ||
+               text.Contains("<文件说明>", StringComparison.Ordinal) ||
+               text.Contains("<公司名>", StringComparison.Ordinal);
+    }
+
+    private static bool IsUserWritableLocation(string path)
+    {
+        try
+        {
+            var normalized = Path.GetFullPath(path);
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return !string.IsNullOrWhiteSpace(userProfile) && normalized.StartsWith(
+                $"{Path.GetFullPath(userProfile).TrimEnd(Path.DirectorySeparatorChar)}" +
+                Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception exception) when (exception is
+                                           ArgumentException or
+                                           NotSupportedException or
+                                           PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private static string SanitizeProbeText(string value) =>
+        value.Replace('\r', ' ').Replace('\n', ' ').Trim();
 
     private static string FormatMilliseconds(double? value) =>
         value is null ? "—" : $"{value.Value:F2} ms";
@@ -421,4 +786,14 @@ public sealed record ContextMenuExportRow(
     string OwnerEvidence,
     string BinaryProduct,
     string TrialSummary,
-    string FailureDetails);
+    string FailureDetails,
+    string RegistrationName,
+    string BehaviorSummary,
+    string EvidenceLevel,
+    string ObservedMenuSummary,
+    string ObservedMenuItems,
+    string RiskSignals,
+    string ComClassName,
+    string FileVersion,
+    string Sha256,
+    string SignaturePublisher);

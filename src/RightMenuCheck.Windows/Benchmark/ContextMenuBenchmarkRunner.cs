@@ -148,6 +148,7 @@ public sealed class ContextMenuBenchmarkRunner
                 response.WorkerProcessId,
                 response.WorkerArchitecture,
                 response.Phases,
+                response.Menu,
                 response.Error));
         }
 

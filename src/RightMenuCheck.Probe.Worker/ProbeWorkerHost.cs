@@ -86,6 +86,7 @@ internal static class ProbeWorkerHost
             DateTimeOffset.UtcNow,
             TotalDurationMilliseconds: 0,
             Phases: [],
+            Menu: null,
             new ProbeError(
                 "RequestValidation",
                 validationError ?? "The request is invalid.",

@@ -29,6 +29,7 @@ public sealed record BenchmarkTrialResult(
     int WorkerProcessId,
     string WorkerArchitecture,
     IReadOnlyList<ProbePhaseTiming> Phases,
+    ProbeMenuSnapshot? Menu,
     ProbeError? Error);
 
 public sealed record PhaseBenchmarkStatistics(

@@ -333,5 +333,6 @@ public sealed class ProbeWorkerClient : IProbeWorkerClient
             startedAt,
             duration.TotalMilliseconds,
             Phases: [],
+            Menu: null,
             new ProbeError(errorType, errorMessage, hResult));
 }

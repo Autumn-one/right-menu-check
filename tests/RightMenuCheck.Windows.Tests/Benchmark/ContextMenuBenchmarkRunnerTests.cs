@@ -48,6 +48,39 @@ public sealed class ContextMenuBenchmarkRunnerTests
     }
 
     [Fact]
+    public async Task RunPreservesIsolatedMenuEvidenceForEveryTrial()
+    {
+        var menu = new ProbeMenuSnapshot(
+            CommandIdCount: 1,
+            Items:
+            [
+                new ProbeMenuItem(
+                    ProbeMenuItemKind.Command,
+                    "Inspect",
+                    Depth: 0,
+                    CommandId: 1,
+                    CanonicalVerb: "inspect",
+                    HelpText: null,
+                    IsDisabled: false,
+                    IsHidden: false),
+            ],
+            Truncated: false);
+        var client = new FakeProbeClient(
+            CreateSuccess(1, 1, menu),
+            CreateSuccess(1, 1, menu),
+            CreateSuccess(1, 1, menu));
+        var runner = CreateRunner(client);
+
+        var result = await runner.RunAsync(
+            CreateMetadata(ContextMenuRegistrationKind.ClassicContextMenuHandler),
+            new BenchmarkTarget(ProbeTargetKind.File, "C:\\Samples\\file.txt"),
+            new BenchmarkOptions(3, TimeSpan.FromSeconds(1)),
+            CancellationToken.None);
+
+        Assert.All(result.Trials, trial => Assert.Equal(menu, trial.Menu));
+    }
+
+    [Fact]
     public async Task RunKeepsTimeoutAndCrashCountsSeparateFromSuccessfulStatistics()
     {
         var client = new FakeProbeClient(
@@ -204,7 +237,10 @@ public sealed class ContextMenuBenchmarkRunnerTests
             Issues: []);
     }
 
-    private static ProbeResponse CreateSuccess(double activation, double query) => new(
+    private static ProbeResponse CreateSuccess(
+        double activation,
+        double query,
+        ProbeMenuSnapshot? menu = null) => new(
         ProbeProtocol.CurrentVersion,
         Guid.NewGuid(),
         "nonce",
@@ -217,6 +253,7 @@ public sealed class ContextMenuBenchmarkRunnerTests
             new ProbePhaseTiming(ProbePhase.ComActivation, activation, HResult: 0, Succeeded: true),
             new ProbePhaseTiming(ProbePhase.MenuConstruction, query, HResult: 0, Succeeded: true),
         ],
+        menu,
         Error: null);
 
     private static ProbeResponse CreateFailure(ProbeOutcome outcome) => new(
@@ -229,6 +266,7 @@ public sealed class ContextMenuBenchmarkRunnerTests
         DateTimeOffset.UtcNow,
         TotalDurationMilliseconds: 100,
         Phases: [],
+        Menu: null,
         new ProbeError(outcome.ToString(), "Failure fixture", HResult: null));
 
     private static ProbeResponse CreateQueryFailure() => new(
@@ -248,6 +286,7 @@ public sealed class ContextMenuBenchmarkRunnerTests
                 HResult: unchecked((int)0x80004005),
                 Succeeded: false),
         ],
+        Menu: null,
         new ProbeError(
             "QueryContextMenu",
             "The handler rejected the sample.",

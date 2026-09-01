@@ -9,6 +9,7 @@ using RightMenuCheck.App.Services;
 using RightMenuCheck.App.ViewModels;
 using RightMenuCheck.Distribution;
 using RightMenuCheck.Windows.Diagnostics;
+using RightMenuCheck.Windows.Management;
 using RightMenuCheck.Windows.Security;
 
 namespace RightMenuCheck.App;
@@ -196,7 +197,8 @@ public partial class App : Application, IDisposable
 
         var viewModel = new MainWindowViewModel(
             new ContextMenuDataService(_logger!),
-            new ContextMenuManagementService(_logger!));
+            new ContextMenuManagementService(_logger!),
+            new WindowsContextMenuModeService(_logger!));
         var mainWindow = new MainWindow(viewModel);
         if (startupArguments is
             {

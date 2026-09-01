@@ -38,6 +38,7 @@ internal static class StaProbeRunner
                 DateTimeOffset.UtcNow,
                 TotalDurationMilliseconds: 0,
                 Phases: [],
+                Menu: null,
                 new ProbeError(
                     "CoInitializeEx",
                     Marshal.GetExceptionForHR(initializeResult)?.Message ??

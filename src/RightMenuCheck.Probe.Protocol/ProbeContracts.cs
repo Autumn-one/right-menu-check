@@ -2,7 +2,7 @@ namespace RightMenuCheck.Probe.Protocol;
 
 public static class ProbeProtocol
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     public const int NonceSizeBytes = 32;
     public const int MaximumMessageBytes = 1024 * 1024;
 }
@@ -69,6 +69,30 @@ public sealed record ProbeError(
     string Message,
     int? HResult);
 
+public enum ProbeMenuItemKind
+{
+    Command,
+    Submenu,
+    Separator,
+    OwnerDrawn,
+}
+
+public sealed record ProbeMenuItem(
+    ProbeMenuItemKind Kind,
+    string? Title,
+    int Depth,
+    uint? CommandId,
+    string? CanonicalVerb,
+    string? HelpText,
+    bool IsDisabled,
+    bool IsHidden);
+
+public sealed record ProbeMenuSnapshot(
+    int CommandIdCount,
+    IReadOnlyList<ProbeMenuItem> Items,
+    bool Truncated,
+    string? Limitation = null);
+
 public sealed record ProbeResponse(
     int ProtocolVersion,
     Guid RequestId,
@@ -79,4 +103,5 @@ public sealed record ProbeResponse(
     DateTimeOffset StartedAt,
     double TotalDurationMilliseconds,
     IReadOnlyList<ProbePhaseTiming> Phases,
+    ProbeMenuSnapshot? Menu,
     ProbeError? Error);

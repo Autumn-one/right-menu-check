@@ -89,6 +89,57 @@ public partial class DiagnosticWorkbench : UserControl
     private void ClearSample_Click(object sender, RoutedEventArgs e) =>
         ViewModel.SamplePath = string.Empty;
 
+    private async void WindowsContextMenuMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox checkBox)
+        {
+            return;
+        }
+
+        var useWindows11Mode = checkBox.IsChecked == true;
+        var plan = ViewModel.PreviewWindowsContextMenuMode(useWindows11Mode);
+        if (!plan.IsSupported)
+        {
+            ViewModel.RefreshWindowsContextMenuStatus();
+            ShowInformation(plan.BlockReason ?? "无法更改系统右键菜单模式。", "无法更改右键样式");
+            return;
+        }
+
+        if (plan.IsNoChange)
+        {
+            ViewModel.RefreshWindowsContextMenuStatus();
+            return;
+        }
+
+        var targetName = useWindows11Mode ? "Windows 11 简洁菜单" : "经典完整菜单";
+        var message = $"切换为{targetName}？\n\n" +
+                      $"{plan.ImpactDescription}\n\n" +
+                      "这是 Windows 的兼容覆盖，并非 Microsoft 公开设置；未来系统更新可能使其失效。";
+        if (!Confirm(message, "确认更改右键样式"))
+        {
+            ViewModel.RefreshWindowsContextMenuStatus();
+            return;
+        }
+
+        _ = await ViewModel.ApplyWindowsContextMenuModeAsync(useWindows11Mode);
+    }
+
+    private async void RestartExplorer_Click(object sender, RoutedEventArgs e)
+    {
+        if (!Confirm(
+                "重启 Explorer 以应用右键菜单样式？\n\n所有已打开的文件资源管理器窗口都会关闭。",
+                "确认重启 Explorer"))
+        {
+            return;
+        }
+
+        var result = await ViewModel.RestartExplorerAsync();
+        if (result is { Succeeded: false })
+        {
+            ShowInformation(result.Message, "Explorer 重启未完成");
+        }
+    }
+
     private async void BackupSelected_Click(object sender, RoutedEventArgs e)
     {
         var backupPath = SelectBackupPath("menu-backup");

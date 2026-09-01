@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using RightMenuCheck.Core.Inventory;
 using RightMenuCheck.Core.Metadata;
+using RightMenuCheck.Probe.Protocol;
 using RightMenuCheck.Windows.Benchmark;
 using RightMenuCheck.Windows.Diagnostics;
 using RightMenuCheck.Windows.Inventory;
@@ -152,6 +153,10 @@ public sealed class ContextMenuDataService : IContextMenuDataService
                 ? AppLogLevel.Error
                 : AppLogLevel.Information;
         var failureReasons = BenchmarkFailureAnalyzer.Group(result);
+        var observedMenus = result.Trials
+            .Where(static trial => trial.Outcome == ProbeOutcome.Success && trial.Menu is not null)
+            .Select(static trial => trial.Menu!)
+            .ToArray();
         _logger.Log(
             level,
             eventName,
@@ -167,6 +172,11 @@ public sealed class ContextMenuDataService : IContextMenuDataService
                 ["failureCount"] = result.FailureCount,
                 ["medianMilliseconds"] = result.HandlerDuration?.Median,
                 ["percentile95Milliseconds"] = result.HandlerDuration?.Percentile95,
+                ["observedMenuTrials"] = observedMenus.Length,
+                ["maximumObservedMenuItems"] = observedMenus.Length == 0
+                    ? null
+                    : observedMenus.Max(static menu => menu.Items.Count),
+                ["menuSnapshotTruncated"] = observedMenus.Any(static menu => menu.Truncated),
                 ["failureReasons"] = failureReasons.Count == 0
                     ? null
                     : string.Join(" || ", failureReasons.Select(FormatFailureReasonForLog)),
