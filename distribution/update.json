@@ -1,23 +1,23 @@
 {
   "schemaVersion": 2,
   "payload": {
-    "sequence": 2,
-    "issuedAtUtc": "2026-08-30T23:20:45.5775019+00:00",
-    "expiresAtUtc": "2027-08-30T23:20:45.5775019+00:00",
-    "version": "0.0.0",
+    "sequence": 3,
+    "issuedAtUtc": "2026-09-01T20:39:22.4125431+00:00",
+    "expiresAtUtc": "2027-09-01T20:39:22.4125431+00:00",
+    "version": "0.1.1",
     "package": {
-      "assetName": "channel-idle.zip",
-      "sizeBytes": 1,
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "primaryUrl": "https://github.com/Autumn-one/right-menu-check/releases/download/channel-idle/channel-idle.zip",
+      "assetName": "RightMenuCheck-0.1.1-win-x64.zip",
+      "sizeBytes": 309685331,
+      "sha256": "9ab04b0266c4f378cd37142321e7d45bd847044900602deea6d362211ae452ea",
+      "primaryUrl": "https://github.com/Autumn-one/right-menu-check/releases/download/v0.1.1/RightMenuCheck-0.1.1-win-x64.zip",
       "mirrorUrls": [
-        "https://ghfast.top/https://github.com/Autumn-one/right-menu-check/releases/download/channel-idle/channel-idle.zip",
-        "https://gh-proxy.com/https://github.com/Autumn-one/right-menu-check/releases/download/channel-idle/channel-idle.zip"
+        "https://ghfast.top/https://github.com/Autumn-one/right-menu-check/releases/download/v0.1.1/RightMenuCheck-0.1.1-win-x64.zip",
+        "https://gh-proxy.com/https://github.com/Autumn-one/right-menu-check/releases/download/v0.1.1/RightMenuCheck-0.1.1-win-x64.zip"
       ]
     },
-    "releaseNotes": "Update channel is idle after disposable end-to-end verification.",
-    "releasePageUrl": "https://github.com/Autumn-one/right-menu-check"
+    "releaseNotes": "\u7A33\u5B9A\u7248\u5B89\u88C5\u5305\u4E0E\u81EA\u52A8\u66F4\u65B0\u3002",
+    "releasePageUrl": "https://github.com/Autumn-one/right-menu-check/releases/tag/v0.1.1"
   },
   "signatureAlgorithm": "ECDSA_P256_SHA256",
-  "signature": "MEYCIQDnAaQuY2IBXGFh1O1hxBEEoaEZ5ifdFry7SSAA40dS0wIhAK0SDYr7eSUPxawsOt5jjzYPFL9i8VfYFlzqKM\u002BnD1hM"
+  "signature": "MEUCIQDTXVzHKAIv5X1OknDqiZn2rOfY8T9EWFSkib8QaiEpggIgUt19AN9mdJ03Np39Q1Meou3Viy5Cx0EMMLLiAERwTPI="
 }
