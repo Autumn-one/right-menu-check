@@ -29,16 +29,18 @@ public sealed record TelemetryClientOptions
         TimeSpan? heartbeatInterval = null,
         TimeSpan? requestTimeout = null,
         TimeSpan? initialRetryDelay = null,
-        TimeSpan? maximumRetryDelay = null)
+        TimeSpan? maximumRetryDelay = null,
+        bool allowInsecureRemoteHttp = false)
     {
         ArgumentNullException.ThrowIfNull(baseAddress);
-        ValidateBaseAddress(baseAddress);
+        ValidateBaseAddress(baseAddress, allowInsecureRemoteHttp);
 
         BaseAddress = baseAddress;
         HeartbeatInterval = heartbeatInterval ?? DefaultHeartbeatInterval;
         RequestTimeout = requestTimeout ?? DefaultRequestTimeout;
         InitialRetryDelay = initialRetryDelay ?? DefaultInitialRetryDelay;
         MaximumRetryDelay = maximumRetryDelay ?? DefaultMaximumRetryDelay;
+        AllowsInsecureRemoteHttp = allowInsecureRemoteHttp;
         if (HeartbeatInterval <= TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(
@@ -72,10 +74,12 @@ public sealed record TelemetryClientOptions
 
     public TimeSpan MaximumRetryDelay { get; }
 
+    public bool AllowsInsecureRemoteHttp { get; }
+
     internal Uri Resolve(string absolutePath) =>
         new(BaseAddress, absolutePath.TrimStart('/'));
 
-    private static void ValidateBaseAddress(Uri baseAddress)
+    private static void ValidateBaseAddress(Uri baseAddress, bool allowInsecureRemoteHttp)
     {
         var isSecure = baseAddress.Scheme.Equals(
             Uri.UriSchemeHttps,
@@ -84,7 +88,12 @@ public sealed record TelemetryClientOptions
                                         Uri.UriSchemeHttp,
                                         StringComparison.OrdinalIgnoreCase) &&
                                     baseAddress.IsLoopback;
-        if (!baseAddress.IsAbsoluteUri || (!isSecure && !isLoopbackTestAddress))
+        var isSignedInsecureEndpoint = allowInsecureRemoteHttp &&
+                                       baseAddress.Scheme.Equals(
+                                           Uri.UriSchemeHttp,
+                                           StringComparison.OrdinalIgnoreCase);
+        if (!baseAddress.IsAbsoluteUri ||
+            (!isSecure && !isLoopbackTestAddress && !isSignedInsecureEndpoint))
         {
             throw new ArgumentException(
                 "The telemetry base address must use HTTPS, except for loopback tests.",

@@ -383,6 +383,9 @@ public sealed class AppTelemetryClientTests
     {
         _ = new TelemetryClientOptions(new Uri("https://telemetry.example.test/"));
         _ = new TelemetryClientOptions(new Uri("http://127.0.0.1:8123/"));
+        _ = new TelemetryClientOptions(
+            new Uri("http://43.159.148.243/"),
+            allowInsecureRemoteHttp: true);
 
         Assert.Throws<ArgumentException>(() =>
             new TelemetryClientOptions(new Uri("http://telemetry.example.test/")));

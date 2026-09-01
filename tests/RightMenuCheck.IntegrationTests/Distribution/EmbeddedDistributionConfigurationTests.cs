@@ -17,6 +17,8 @@ public sealed class EmbeddedDistributionConfigurationTests
 
         Assert.Equal("Autumn-one/right-menu-check", configuration.Settings.Repository);
         Assert.Equal(3, configuration.Settings.GetUpdateManifestCandidates().Count);
+        Assert.Equal("Autumn-one/maidian", configuration.Settings.TelemetryDiscovery?.Repository);
+        Assert.Equal(3, configuration.Settings.GetTelemetryEndpointCandidates().Count);
         Assert.Equal(
             "DBBA2438E473E3851F601256E37F70EE20E25459368D8229FCF84507B8EF812B",
             fingerprint);

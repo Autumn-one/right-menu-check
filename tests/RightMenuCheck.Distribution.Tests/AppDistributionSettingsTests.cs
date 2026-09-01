@@ -14,7 +14,12 @@ public sealed class AppDistributionSettingsTests
             "distribution/update.json",
             "distribution/messages.json",
             DistributionEndpoints.DefaultMirrorPrefixes,
-            "http://127.0.0.1:17789/");
+            "http://127.0.0.1:17789/",
+            new TelemetryDiscoverySettings(
+                "Autumn-one/maidian",
+                "main",
+                "apps/rightmenucheck.json",
+                TelemetryProducts.RightMenuCheck));
 
         settings.Validate();
 
@@ -22,6 +27,11 @@ public sealed class AppDistributionSettingsTests
         Assert.EndsWith(
             "/distribution/messages.json",
             settings.GetAnnouncementCandidates()[2],
+            StringComparison.Ordinal);
+        Assert.Equal(3, settings.GetTelemetryEndpointCandidates().Count);
+        Assert.Contains(
+            "Autumn-one/maidian",
+            settings.GetTelemetryEndpointCandidates()[0],
             StringComparison.Ordinal);
     }
 

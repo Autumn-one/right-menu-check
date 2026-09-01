@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "repository": "Autumn-one/right-menu-check",
   "branch": "main",
   "updateManifestPath": "distribution/update.json",
@@ -8,5 +8,11 @@
     "https://ghfast.top/",
     "https://gh-proxy.com/"
   ],
-  "telemetryBaseUrl": null
+  "telemetryBaseUrl": null,
+  "telemetryDiscovery": {
+    "repository": "Autumn-one/maidian",
+    "branch": "main",
+    "configPath": "apps/rightmenucheck.json",
+    "productId": "rightmenucheck"
+  }
 }

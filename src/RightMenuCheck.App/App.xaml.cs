@@ -220,7 +220,11 @@ public partial class App : Application, IDisposable
                 "Application restarted after an update rollback.");
         }
 
-        StartTelemetry(ResolveTelemetryBaseUrl(configuration.Settings.TelemetryBaseUrl));
+        var telemetryDiscovery = new TelemetryEndpointDiscoveryService(
+            configuration,
+            documentClient,
+            _logger!);
+        StartTelemetry(await telemetryDiscovery.ResolveAsync(cancellationToken));
         _announcementStateStore = new AnnouncementStateStore(_logger!);
         var announcementService = new ApplicationAnnouncementService(
             configuration,
@@ -230,43 +234,21 @@ public partial class App : Application, IDisposable
         await announcementService.ShowPendingAsync(mainWindow, cancellationToken);
     }
 
-    private void StartTelemetry(string? telemetryBaseUrl)
+    private void StartTelemetry(ResolvedTelemetryEndpoint? endpoint)
     {
-        if (string.IsNullOrWhiteSpace(telemetryBaseUrl))
+        if (endpoint is null)
         {
             return;
         }
 
-        var options = new TelemetryClientOptions(new Uri(telemetryBaseUrl, UriKind.Absolute));
+        var options = new TelemetryClientOptions(
+            endpoint.BaseAddress,
+            allowInsecureRemoteHttp: endpoint.AllowsInsecureHttp);
         _telemetryClient = new AppTelemetryClient(
             options,
             new MachineIdentityProvider(_logger!),
             _logger!);
         _ = _telemetryClient.StartAsync(CancellationToken.None);
-    }
-
-    private string? ResolveTelemetryBaseUrl(string? configuredUrl)
-    {
-        var overrideUrl = Environment.GetEnvironmentVariable("RIGHTMENUCHECK_TELEMETRY_URL");
-        if (string.IsNullOrWhiteSpace(overrideUrl))
-        {
-            return configuredUrl;
-        }
-
-        if (Uri.TryCreate(overrideUrl, UriKind.Absolute, out var uri) && uri.IsLoopback)
-        {
-            _logger!.Log(
-                AppLogLevel.Information,
-                "telemetry.loopback_override_enabled",
-                "Loopback telemetry endpoint is enabled for local integration testing.");
-            return overrideUrl;
-        }
-
-        _logger!.Log(
-            AppLogLevel.Warning,
-            "telemetry.override_rejected",
-            "Non-loopback telemetry environment override was rejected.");
-        return configuredUrl;
     }
 
     private static async Task ReportUpdateHealthAsync(

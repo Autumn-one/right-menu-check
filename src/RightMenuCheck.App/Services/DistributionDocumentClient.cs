@@ -60,13 +60,19 @@ public sealed class DistributionDocumentClient : IDistributionDocumentClient
             bestSequence = 0;
         }
 
-        var fetches = candidates
-            .Select(candidate => FetchCandidateAsync<T>(candidate, validator, cancellationToken))
-            .ToArray();
-        var sources = await Task.WhenAll(fetches).ConfigureAwait(false);
-        var updated = false;
-        foreach (var source in sources.Where(static source => source is not null))
+        foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            var source = await FetchCandidateAsync<T>(
+                    candidate,
+                    validator,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (source is null)
+            {
+                continue;
+            }
+
             var sequence = sequenceSelector(source!.Document);
             if (sequence <= 0)
             {
@@ -74,21 +80,26 @@ public sealed class DistributionDocumentClient : IDistributionDocumentClient
                 continue;
             }
 
-            if (sequence > bestSequence)
+            if (best is null || sequence > bestSequence)
             {
                 best = source.Document;
                 bestSequence = sequence;
-                updated = true;
+                TryWriteCache(cachePath, DistributionJson.Serialize(best, writeIndented: true));
+                return best;
             }
-            else if (sequence < bestSequence)
+
+            if (sequence < bestSequence)
             {
                 LogRollbackAttempt(source.Source, sequence, bestSequence);
+                continue;
             }
-        }
 
-        if (updated && best is not null)
-        {
-            TryWriteCache(cachePath, DistributionJson.Serialize(best, writeIndented: true));
+            if (CanonicalDocumentsEqual(best, source.Document))
+            {
+                return best;
+            }
+
+            LogSequenceConflict(source.Source, sequence);
         }
 
         return best;
@@ -375,6 +386,27 @@ public sealed class DistributionDocumentClient : IDistributionDocumentClient
                 ["sequence"] = sequence,
                 ["highestSequence"] = highestSequence,
             });
+    }
+
+    private void LogSequenceConflict(string source, long sequence)
+    {
+        var host = Uri.TryCreate(source, UriKind.Absolute, out var uri) ? uri.Host : "invalid";
+        _logger.Log(
+            AppLogLevel.Error,
+            "distribution.sequence_conflict",
+            "A signed distribution document reused a cached sequence with different content.",
+            new Dictionary<string, object?>
+            {
+                ["host"] = host,
+                ["sequence"] = sequence,
+            });
+    }
+
+    private static bool CanonicalDocumentsEqual<T>(T left, T right)
+    {
+        var leftHash = SHA256.HashData(DistributionJson.SerializeCanonical(left));
+        var rightHash = SHA256.HashData(DistributionJson.SerializeCanonical(right));
+        return CryptographicOperations.FixedTimeEquals(leftHash, rightHash);
     }
 
     private static void TryDeleteFile(string path)

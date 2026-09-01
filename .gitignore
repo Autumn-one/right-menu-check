@@ -6,6 +6,7 @@
 # dotenv files
 .env
 github-conf.json
+maidian.json
 .secrets/
 
 # User-specific files

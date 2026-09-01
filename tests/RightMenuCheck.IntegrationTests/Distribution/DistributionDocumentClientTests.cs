@@ -10,6 +10,36 @@ namespace RightMenuCheck.IntegrationTests.Distribution;
 public sealed class DistributionDocumentClientTests
 {
     [Fact]
+    public async Task FirstVerifiedSourceStopsSequentialFunnel()
+    {
+        using var fixture = new TemporaryDirectory();
+        var keys = CreateKeys();
+        var valid = CreateManifest(keys.PrivateKey, version: "1.1.0");
+        var calls = new List<string>();
+        using var httpClient = new HttpClient(new StubHandler(request =>
+        {
+            calls.Add(request.RequestUri!.AbsoluteUri);
+            return calls.Count == 1
+                ? new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(DistributionJson.Serialize(valid)),
+                }
+                : throw new InvalidOperationException("The funnel requested a later source.");
+        }));
+        var client = new DistributionDocumentClient(httpClient, NullAppLogger.Instance);
+
+        var fetched = await client.FetchVerifiedAsync<SignedUpdateManifest>(
+            ["https://first.example/update.json", "https://second.example/update.json"],
+            Path.Combine(fixture.Path, "update-cache.json"),
+            manifest => manifest.HasValidSignature(keys.PublicKey),
+            manifest => manifest.Payload.Sequence,
+            CancellationToken.None);
+
+        Assert.NotNull(fetched);
+        Assert.Equal(["https://first.example/update.json"], calls);
+    }
+
+    [Fact]
     public async Task FetchSkipsTamperedSourceAndFallsBackToVerifiedCache()
     {
         using var fixture = new TemporaryDirectory();
@@ -117,6 +147,40 @@ public sealed class DistributionDocumentClientTests
         Assert.NotNull(fetched);
         Assert.Equal(5, fetched.Payload.Sequence);
         Assert.Equal("1.5.0", fetched.Payload.Version);
+    }
+
+    [Fact]
+    public async Task LowerSequenceMirrorContinuesToNewerDirectSource()
+    {
+        using var fixture = new TemporaryDirectory();
+        var keys = CreateKeys();
+        var cached = CreateManifest(keys.PrivateKey, "1.5.0", sequence: 5);
+        var replayed = CreateManifest(keys.PrivateKey, "9.0.0", sequence: 4);
+        var newer = CreateManifest(keys.PrivateKey, "2.0.0", sequence: 6);
+        var cachePath = Path.Combine(fixture.Path, "update-cache.json");
+        File.WriteAllText(cachePath, DistributionJson.Serialize(cached, writeIndented: true));
+        var calls = new List<string>();
+        using var httpClient = new HttpClient(new StubHandler(request =>
+        {
+            calls.Add(request.RequestUri!.Host);
+            var document = request.RequestUri.Host == "mirror.example" ? replayed : newer;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(DistributionJson.Serialize(document)),
+            };
+        }));
+        var client = new DistributionDocumentClient(httpClient, NullAppLogger.Instance);
+
+        var fetched = await client.FetchVerifiedAsync<SignedUpdateManifest>(
+            ["https://mirror.example/update.json", "https://github.example/update.json"],
+            cachePath,
+            manifest => manifest.HasValidSignature(keys.PublicKey),
+            manifest => manifest.Payload.Sequence,
+            CancellationToken.None);
+
+        Assert.NotNull(fetched);
+        Assert.Equal(6, fetched.Payload.Sequence);
+        Assert.Equal(["mirror.example", "github.example"], calls);
     }
 
     private static SignedUpdateManifest CreateManifest(
