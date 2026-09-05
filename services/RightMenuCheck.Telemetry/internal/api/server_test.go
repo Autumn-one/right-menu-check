@@ -65,6 +65,23 @@ func TestAuthenticatedTelemetryProtocolUsesServerTime(t *testing.T) {
 		t.Fatalf("heartbeat = %d, %q", heartbeat.Code, heartbeat.Body.String())
 	}
 	now = now.Add(10 * time.Second)
+	liveSummary := perform(server.Handler(), http.MethodGet, "/v1/admin/summary", "", "", "127.0.0.1:5000", "Bearer "+adminToken)
+	var live summaryResponse
+	if err := json.Unmarshal(liveSummary.Body.Bytes(), &live); err != nil {
+		t.Fatal(err)
+	}
+	if liveSummary.Code != http.StatusOK || live.TotalDurationMS != 0 || live.ActiveDurationMS != 15_000 {
+		t.Fatalf("live summary = %d, %#v", liveSummary.Code, live)
+	}
+	liveMachines := perform(server.Handler(), http.MethodGet, "/v1/admin/machines", "", "", "127.0.0.1:5000", "Bearer "+adminToken)
+	var machinePage pageResponse[machineResponse]
+	if err := json.Unmarshal(liveMachines.Body.Bytes(), &machinePage); err != nil {
+		t.Fatal(err)
+	}
+	if liveMachines.Code != http.StatusOK || len(machinePage.Items) != 1 ||
+		machinePage.Items[0].TotalDurationMS != 0 || machinePage.Items[0].ActiveDurationMS != 15_000 {
+		t.Fatalf("live machines = %d, %#v", liveMachines.Code, machinePage)
+	}
 	end := perform(server.Handler(), http.MethodPost, endPath, validBody, "application/json", "203.0.113.10:1234", "Bearer "+firstToken.raw)
 	if end.Code != http.StatusNoContent {
 		t.Fatalf("end = %d, %s", end.Code, end.Body.String())
@@ -80,7 +97,7 @@ func TestAuthenticatedTelemetryProtocolUsesServerTime(t *testing.T) {
 	}
 	if summaryPayload.MachineCount != 1 || summaryPayload.StartupCount != 1 ||
 		summaryPayload.ActiveMachineCount != 0 || summaryPayload.NormalSessionCount != 1 ||
-		summaryPayload.TotalDurationMS != 25_000 {
+		summaryPayload.TotalDurationMS != 25_000 || summaryPayload.ActiveDurationMS != 0 {
 		t.Fatalf("unexpected summary: %#v", summaryPayload)
 	}
 	sessions := perform(server.Handler(), http.MethodGet, "/v1/admin/sessions", "", "", "127.0.0.1:5000", "Bearer "+adminToken)

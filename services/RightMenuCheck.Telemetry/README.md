@@ -101,6 +101,8 @@ The previous raw session row must still be inside RMC_TELEMETRY_CLOSED_SESSION_T
 
 Normal end, stale-session settlement, and resume settlement update the machine duration and normal/abnormal counters in the same SQLite transaction as the raw session row. Repeated settlement is idempotent.
 
+The summary and machine APIs keep `totalDurationMilliseconds` as the durable settled total and additionally return `activeDurationMilliseconds`, the sum of open sessions from start through their last received heartbeat. Both values come from the same SQLite query snapshot. The dashboard adds these fields for its cumulative duration, without extrapolating between heartbeats or counting a settled session twice. Existing clients can keep using the settled total; the dashboard also accepts older servers that omit the additive field.
+
 A dedicated cleanup goroutine:
 
 1. settles open sessions whose last heartbeat is older than RMC_TELEMETRY_SESSION_TIMEOUT; and

@@ -60,6 +60,7 @@ type Summary struct {
 	NormalSessionCount   int64
 	AbnormalSessionCount int64
 	TotalDurationMS      int64
+	ActiveDurationMS     int64
 }
 
 type Machine struct {
@@ -68,6 +69,7 @@ type Machine struct {
 	FirstStartedAt       time.Time
 	LastStartedAt        time.Time
 	TotalDurationMS      int64
+	ActiveDurationMS     int64
 	NormalSessionCount   int64
 	AbnormalSessionCount int64
 	ActiveSessionCount   int64

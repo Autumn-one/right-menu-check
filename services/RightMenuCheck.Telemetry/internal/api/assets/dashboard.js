@@ -53,6 +53,11 @@
     return `${totalSeconds}秒`;
   }
 
+  function cumulativeDuration(record) {
+    // Settled totals retain their API meaning; open sessions stop at the last heartbeat.
+    return Number(record.totalDurationMilliseconds || 0) + Number(record.activeDurationMilliseconds || 0);
+  }
+
   function formatTime(value) {
     if (!value) return "-";
     return new Intl.DateTimeFormat("zh-CN", {
@@ -91,7 +96,7 @@
     byId("activeSessionCount").textContent = summary.activeSessionCount.toLocaleString("zh-CN");
     byId("startupCount").textContent = summary.startupCount.toLocaleString("zh-CN");
     byId("sessionCount").textContent = summary.sessionCount.toLocaleString("zh-CN");
-    byId("totalDuration").textContent = formatDuration(summary.totalDurationMilliseconds);
+    byId("totalDuration").textContent = formatDuration(cumulativeDuration(summary));
   }
 
   function renderDevices(page) {
@@ -117,7 +122,7 @@
       row.appendChild(machineCell);
 
       appendCell(row, device.startupCount.toLocaleString("zh-CN"), "numeric");
-      appendCell(row, formatDuration(device.totalDurationMilliseconds), "numeric");
+      appendCell(row, formatDuration(cumulativeDuration(device)), "numeric");
       appendCell(row, formatTime(device.lastStartedAtUtc));
       appendCell(row, device.abnormalSessionCount.toLocaleString("zh-CN"), "numeric");
       body.appendChild(row);
@@ -141,7 +146,7 @@
     byId("detailStatus").textContent = device.activeSessionCount > 0 ? "运行中" : "离线";
     byId("detailMachine").textContent = device.machineId;
     byId("detailStarts").textContent = device.startupCount.toLocaleString("zh-CN");
-    byId("detailDuration").textContent = formatDuration(device.totalDurationMilliseconds);
+    byId("detailDuration").textContent = formatDuration(cumulativeDuration(device));
     byId("detailLastSeen").textContent = formatTime(device.lastSeenAtUtc);
   }
 

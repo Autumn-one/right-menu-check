@@ -52,6 +52,7 @@ async function dashboard() {
           machineCount: 1, activeMachineCount: device.activeSessionCount,
           activeSessionCount: device.activeSessionCount, startupCount: device.startupCount,
           sessionCount: device.startupCount, totalDurationMilliseconds: device.totalDurationMilliseconds,
+          activeDurationMilliseconds: device.activeDurationMilliseconds,
         };
       } else if (url.pathname === "/v1/admin/machines") {
         payload = { items: [{ ...device }] };
@@ -115,4 +116,27 @@ test("refresh does not reselect a closed detail or request its history", async (
   assert.equal(page.elements.get("detailStatus").className, "status-badge idle");
   assert.equal(page.elements.get("sessionRows").children.length, 0);
   assert.ok(page.requests.slice(requestCount).every(path => !path.startsWith("/v1/admin/sessions")));
+});
+
+test("cumulative duration adds confirmed live time once and supports older APIs", async () => {
+  const page = await dashboard();
+  await page.select();
+  const assertDuration = expected => {
+    for (const id of ["totalDuration", "detailDuration"]) {
+      assert.equal(page.elements.get(id).textContent, expected);
+    }
+    assert.equal(page.elements.get("deviceRows").children[0].children[3].textContent, expected);
+  };
+  assertDuration("0\u79d2");
+  page.change({ totalDurationMilliseconds: 60000, activeDurationMilliseconds: 120000 });
+  await page.refresh();
+  assertDuration("3\u5206\u949f");
+  await page.tick();
+  assertDuration("3\u5206\u949f");
+  page.change({ totalDurationMilliseconds: 180000, activeDurationMilliseconds: 0, activeSessionCount: 0 });
+  await page.refresh();
+  assertDuration("3\u5206\u949f");
+  page.change({ activeDurationMilliseconds: undefined });
+  await page.refresh();
+  assertDuration("3\u5206\u949f");
 });

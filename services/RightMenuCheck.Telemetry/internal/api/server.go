@@ -103,6 +103,7 @@ type summaryResponse struct {
 	NormalSessionCount   int64 `json:"normalSessionCount"`
 	AbnormalSessionCount int64 `json:"abnormalSessionCount"`
 	TotalDurationMS      int64 `json:"totalDurationMilliseconds"`
+	ActiveDurationMS     int64 `json:"activeDurationMilliseconds"`
 }
 
 type machineResponse struct {
@@ -111,6 +112,7 @@ type machineResponse struct {
 	FirstStartedAtUTC    time.Time `json:"firstStartedAtUtc"`
 	LastStartedAtUTC     time.Time `json:"lastStartedAtUtc"`
 	TotalDurationMS      int64     `json:"totalDurationMilliseconds"`
+	ActiveDurationMS     int64     `json:"activeDurationMilliseconds"`
 	NormalSessionCount   int64     `json:"normalSessionCount"`
 	AbnormalSessionCount int64     `json:"abnormalSessionCount"`
 	ActiveSessionCount   int64     `json:"activeSessionCount"`
@@ -538,6 +540,7 @@ func (s *Server) summary(response http.ResponseWriter, request *http.Request) {
 		NormalSessionCount:   result.NormalSessionCount,
 		AbnormalSessionCount: result.AbnormalSessionCount,
 		TotalDurationMS:      result.TotalDurationMS,
+		ActiveDurationMS:     result.ActiveDurationMS,
 	})
 }
 
@@ -563,6 +566,7 @@ func (s *Server) machines(response http.ResponseWriter, request *http.Request) {
 			FirstStartedAtUTC:    row.FirstStartedAt.UTC(),
 			LastStartedAtUTC:     row.LastStartedAt.UTC(),
 			TotalDurationMS:      row.TotalDurationMS,
+			ActiveDurationMS:     row.ActiveDurationMS,
 			NormalSessionCount:   row.NormalSessionCount,
 			AbnormalSessionCount: row.AbnormalSessionCount,
 			ActiveSessionCount:   row.ActiveSessionCount,

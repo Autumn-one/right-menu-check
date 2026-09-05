@@ -19,7 +19,9 @@ SELECT
     (SELECT COUNT(DISTINCT machine_id) FROM sessions WHERE ended_at_ms IS NULL),
     COALESCE(SUM(normal_session_count), 0),
     COALESCE(SUM(abnormal_session_count), 0),
-    COALESCE(SUM(total_duration_ms), 0)
+    COALESCE(SUM(total_duration_ms), 0),
+    (SELECT COALESCE(SUM(last_seen_at_ms - started_at_ms), 0)
+     FROM sessions WHERE ended_at_ms IS NULL)
 FROM machines`).Scan(
 		&result.MachineCount,
 		&result.StartupCount,
@@ -28,7 +30,8 @@ FROM machines`).Scan(
 		&result.ActiveMachineCount,
 		&result.NormalSessionCount,
 		&result.AbnormalSessionCount,
-		&result.TotalDurationMS)
+		&result.TotalDurationMS,
+		&result.ActiveDurationMS)
 	if err != nil {
 		return Summary{}, fmt.Errorf("read summary: %w", normalizeSQLiteError(err))
 	}
@@ -42,7 +45,9 @@ SELECT m.machine_id, m.startup_count, m.first_started_at_ms, m.last_started_at_m
        (SELECT COUNT(*) FROM sessions s
         WHERE s.machine_id = m.machine_id AND s.ended_at_ms IS NULL),
        COALESCE((SELECT MAX(s.last_seen_at_ms) FROM sessions s
-                 WHERE s.machine_id = m.machine_id), m.last_started_at_ms)
+                 WHERE s.machine_id = m.machine_id), m.last_started_at_ms),
+       (SELECT COALESCE(SUM(s.last_seen_at_ms - s.started_at_ms), 0)
+        FROM sessions s WHERE s.machine_id = m.machine_id AND s.ended_at_ms IS NULL)
 FROM machines m
 ORDER BY m.last_started_at_ms DESC, m.machine_id
 LIMIT ? OFFSET ?`, limit, offset)
@@ -64,7 +69,8 @@ LIMIT ? OFFSET ?`, limit, offset)
 			&row.NormalSessionCount,
 			&row.AbnormalSessionCount,
 			&row.ActiveSessionCount,
-			&lastSeenMS); err != nil {
+			&lastSeenMS,
+			&row.ActiveDurationMS); err != nil {
 			return nil, fmt.Errorf("scan machine: %w", normalizeSQLiteError(err))
 		}
 		row.FirstStartedAt = fromMilliseconds(firstMS)
