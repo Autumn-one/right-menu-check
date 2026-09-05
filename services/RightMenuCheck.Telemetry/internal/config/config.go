@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	defaultListenAddress = "127.0.0.1:8787"
+	defaultListenAddress = "127.0.0.1:18787"
 	defaultDatabasePath  = "data/telemetry.db"
 )
 

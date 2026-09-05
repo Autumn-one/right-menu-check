@@ -6,6 +6,7 @@ umask 077
 repository="${RMC_TELEMETRY_REPOSITORY:-Autumn-one/right-menu-check}"
 release_tag="${RMC_TELEMETRY_RELEASE_TAG:-latest}"
 server_name="${RMC_TELEMETRY_SERVER_NAME:-}"
+requested_port="${RMC_TELEMETRY_PORT:-}"
 admin_allow="${RMC_TELEMETRY_ADMIN_ALLOW:-}"
 tls_certificate="${RMC_TELEMETRY_TLS_CERTIFICATE:-}"
 tls_key="${RMC_TELEMETRY_TLS_KEY:-}"
@@ -87,6 +88,30 @@ esac
 for command_name in curl tar awk sed grep install mktemp openssl dirname; do
     command -v "$command_name" >/dev/null 2>&1 || fail "missing command: $command_name"
 done
+
+existing_address=""
+if [ -f "$environment_path" ]; then
+    existing_address="$(sed -n 's/^RMC_TELEMETRY_LISTEN_ADDRESS=//p' "$environment_path" | head -n 1 | tr -d '\r')"
+fi
+if [ -n "$requested_port" ]; then
+    case "$requested_port" in
+        *[!0-9]*|0*) fail "RMC_TELEMETRY_PORT must be an integer from 1 to 65535" ;;
+    esac
+    [ "${#requested_port}" -le 5 ] && [ "$requested_port" -le 65535 ] ||
+        fail "RMC_TELEMETRY_PORT must be an integer from 1 to 65535"
+    listen_address="127.0.0.1:$requested_port"
+else
+    listen_address="${existing_address:-127.0.0.1:18787}"
+fi
+printf '%s' "$listen_address" | grep -Eq '^(127\.0\.0\.1|\[::1\]):[1-9][0-9]{0,4}$' ||
+    fail "existing listen address is unsupported; set RMC_TELEMETRY_PORT explicitly"
+listen_port="${listen_address##*:}"
+[ "$listen_port" -le 65535 ] || fail "listen port exceeds 65535"
+if [ "$test_mode" = "0" ] && [ "$listen_address" != "$existing_address" ]; then
+    command -v ss >/dev/null 2>&1 || fail "ss is required to check the selected port"
+    listeners="$(ss -H -ltn "sport = :$listen_port")" || fail "cannot inspect listening ports"
+    [ -z "$listeners" ] || fail "selected port $listen_port is already in use; choose RMC_TELEMETRY_PORT"
+fi
 
 if command -v sha256sum >/dev/null 2>&1; then
     hash_file() { sha256sum "$1" | awk '{ print $1 }'; }
@@ -176,6 +201,12 @@ printf '%s' "$package_version" | grep -Eq \
 
 previous_binary="$temporary_directory/previous-binary"
 previous_unit="$temporary_directory/previous-unit"
+previous_environment="$temporary_directory/previous-environment"
+had_previous_environment=0
+if [ -f "$environment_path" ]; then
+    cp -p -- "$environment_path" "$previous_environment"
+    had_previous_environment=1
+fi
 had_previous_binary=0
 had_previous_unit=0
 service_was_active=0
@@ -198,6 +229,9 @@ if [ "$test_mode" = "0" ] && command -v systemctl >/dev/null 2>&1; then
 fi
 
 restore_service_install() {
+    if [ "$had_previous_environment" -eq 1 ]; then
+        cp -p -- "$previous_environment" "$environment_path"
+    fi
     if [ "$had_previous_binary" -eq 1 ]; then
         cp -p -- "$previous_binary" "$binary_path.restore"
         mv -f -- "$binary_path.restore" "$binary_path"
@@ -251,7 +285,7 @@ if [ ! -f "$environment_path" ]; then
     fi
     [ "${#admin_token}" -ge 32 ] || fail "failed to generate an admin token"
     {
-        printf 'RMC_TELEMETRY_LISTEN_ADDRESS=127.0.0.1:8787\n'
+        printf 'RMC_TELEMETRY_LISTEN_ADDRESS=%s\n' "$listen_address"
         printf 'RMC_TELEMETRY_DATABASE_PATH=%s/telemetry.db\n' "$state_directory"
         printf 'RMC_TELEMETRY_ADMIN_TOKEN=%s\n' "$admin_token"
     } > "$environment_path"
@@ -263,6 +297,28 @@ else
     [ "${#configured_token}" -ge 32 ] &&
         printf '%s' "$configured_token" | grep -Eq '^[^[:space:]]+$' ||
         fail "existing admin token is missing, too short, or contains whitespace"
+fi
+
+if [ -f "$environment_path" ] && [ "$existing_address" != "$listen_address" ]; then
+    environment_new="$config_directory/environment.new"
+    awk -v address="$listen_address" '
+        /^RMC_TELEMETRY_LISTEN_ADDRESS=/ { next }
+        { print }
+        END { print "RMC_TELEMETRY_LISTEN_ADDRESS=" address }
+    ' "$environment_path" > "$environment_new"
+    if [ "$test_mode" = "0" ]; then
+        chmod 0600 "$environment_new"
+    fi
+    mv -f -- "$environment_new" "$environment_path"
+fi
+
+# Render both current templates and the fixed upstream shipped in v0.1.1.
+upstream_template="$temporary_directory/nginx-upstream.template"
+sed -e "s|@@UPSTREAM_ADDRESS@@|$listen_address|g" \
+    -e "s|http://127.0.0.1:8787;|http://$listen_address;|g" \
+    "$package_directory/rightmenucheck-telemetry.nginx.conf.template" > "$upstream_template"
+if [ "$test_mode" = "1" ]; then
+    cp -- "$upstream_template" "$config_directory/nginx-upstream.test.conf"
 fi
 
 new_binary="$binary_path.new"
@@ -293,7 +349,7 @@ if [ "$skip_service_start" = "0" ]; then
     healthy=0
     attempt=0
     while [ "$attempt" -lt 30 ]; do
-        if curl -fsS --max-time 2 http://127.0.0.1:8787/health >/dev/null; then
+        if curl -fsS --max-time 2 "http://$listen_address/health" >/dev/null; then
             healthy=1
             break
         fi
@@ -354,7 +410,7 @@ if [ "$skip_nginx" = "0" ]; then
         -e "s|@@LISTEN_DIRECTIVE@@|$listen_directive|" \
         -e "s|@@SERVER_NAME@@|$server_name|" \
         -e "s|@@ADMIN_ALLOW_DIRECTIVE@@|$admin_allow_directive|" \
-        "$package_directory/rightmenucheck-telemetry.nginx.conf.template" |
+        "$upstream_template" |
         awk -v tls="$tls_directives" \
             '{ if ($0 == "@@TLS_DIRECTIVES@@") { print tls } else { print } }' > "$generated_nginx"
     install -d -m 0755 -o root -g root /etc/nginx/conf.d
@@ -416,4 +472,4 @@ fi
 
 printf 'RightMenuCheck telemetry %s installed.\n' "$package_version"
 printf 'Admin token file: %s\n' "$environment_path"
-printf 'Local dashboard: http://127.0.0.1:8787/\n'
+printf 'Local dashboard: http://%s/\n' "$listen_address"

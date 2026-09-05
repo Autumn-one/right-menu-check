@@ -4,7 +4,7 @@ This is the bounded lifecycle telemetry service for RightMenuCheck. It is a stan
 
 ## Network boundary
 
-The process only accepts a numeric loopback listen address such as 127.0.0.1:8787 or [::1]:8787. Wildcard, LAN, public, and hostname listeners are rejected even when an admin token is configured. The listener address is checked again after net.Listen.
+The process only accepts a numeric loopback listen address such as 127.0.0.1:18787 or [::1]:18787. Wildcard, LAN, public, and hostname listeners are rejected even when an admin token is configured. The listener address is checked again after net.Listen.
 
 The only supported public entry is an HTTPS reverse proxy running on the same machine and forwarding to this loopback service. The proxy must:
 
@@ -179,7 +179,7 @@ GET /health reports only {"status":"ok"} when SQLite is reachable.
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
-| RMC_TELEMETRY_LISTEN_ADDRESS | 127.0.0.1:8787 | Numeric loopback address and port |
+| RMC_TELEMETRY_LISTEN_ADDRESS | 127.0.0.1:18787 | Numeric loopback address and port |
 | RMC_TELEMETRY_DATABASE_PATH | data/telemetry.db | SQLite database location |
 | RMC_TELEMETRY_ADMIN_TOKEN | none, required | Management bearer token, at least 32 characters |
 | RMC_TELEMETRY_ALLOW_UNAUTHENTICATED_LOOPBACK_ADMIN | false | Explicit integration-test-only bypass |
@@ -228,15 +228,17 @@ The builder emits a static binary archive, SHA-256 file, and ECDSA signature for
 Install the current release on the telemetry server with:
 
 ~~~sh
-curl -fsSL https://raw.githubusercontent.com/Autumn-one/right-menu-check/main/scripts/install-telemetry.sh | sudo env RMC_TELEMETRY_SERVER_NAME=43.159.148.243 bash
+curl -fsSL https://raw.githubusercontent.com/Autumn-one/right-menu-check/main/scripts/install-telemetry.sh | sudo env RMC_TELEMETRY_SERVER_NAME=43.159.148.243 RMC_TELEMETRY_PORT=18787 bash
 ~~~
 
 The installer creates a dedicated system user, a protected environment file, a hardened systemd unit, and an Nginx reverse proxy. The generated management token remains in `/etc/rightmenucheck-telemetry/environment` and is preserved during upgrades.
 
+New installations use port 18787. Set `RMC_TELEMETRY_PORT` explicitly to move an existing installation to another free port; without this option its configured address is preserved. The installer updates the service environment, all Nginx upstreams, and health checks together, including when using the original v0.1.1 package. It checks the selected port with `ss` before migration and restores the old environment if service activation fails. The public URL remains unchanged.
+
 Plain HTTP exposes only telemetry ingestion and `/health`. The dashboard and management API remain loopback-only by default. Use an SSH tunnel for administration:
 
 ~~~sh
-ssh -L 8787:127.0.0.1:8787 root@43.159.148.243
+ssh -L 18787:127.0.0.1:18787 root@43.159.148.243
 ~~~
 
-Then open `http://127.0.0.1:8787/`. A public management dashboard requires TLS plus an explicit `RMC_TELEMETRY_ADMIN_ALLOW` IP or CIDR.
+Then open `http://127.0.0.1:18787/`. A public management dashboard requires TLS plus an explicit `RMC_TELEMETRY_ADMIN_ALLOW` IP or CIDR.
