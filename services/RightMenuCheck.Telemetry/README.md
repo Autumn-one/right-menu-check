@@ -201,6 +201,7 @@ Go 1.26.6 or later is required. modernc.org/sqlite is a pure-Go SQLite driver, s
 ~~~powershell
 go test -count=1 ./...
 go vet ./...
+node --test tests/dashboard.test.mjs
 go build -trimpath -o artifacts/rightmenucheck-telemetry-v2.exe ./cmd/rightmenucheck-telemetry
 
 $env:RMC_TELEMETRY_ADMIN_TOKEN = [Convert]::ToHexString(
@@ -215,7 +216,7 @@ Stop the process with Ctrl+C or the service manager termination signal. The HTTP
 Release packages are built for Linux amd64 and arm64 from the repository root:
 
 ~~~powershell
-pwsh -NoLogo -NoProfile -File .\scripts\build-telemetry-packages.ps1 -Version 0.1.2
+pwsh -NoLogo -NoProfile -File .\scripts\build-telemetry-packages.ps1 -Version 0.1.3
 ~~~
 
 The builder emits a static binary archive, SHA-256 file, and ECDSA signature for each architecture under `artifacts/packages/telemetry`. The installer verifies the signature with the embedded distribution public key before trusting the checksum or extracting the archive.
@@ -228,4 +229,4 @@ curl -fsSL https://raw.githubusercontent.com/Autumn-one/right-menu-check/main/sc
 
 The installer replaces the existing executable and the same systemd unit, migrates the listener to `0.0.0.0:18787`, and preserves the SQLite database and management token in `/etc/rightmenucheck-telemetry/environment`. It removes only the old installer's `/etc/nginx/conf.d/rightmenucheck-telemetry.conf` when present. It neither installs a proxy nor uninstalls another application's proxy. On activation failure, the old binary, environment, unit and removed proxy configuration are restored.
 
-Open `http://43.159.148.243:18787/`. Only TCP 18787 needs to be allowed by the firewall. The dashboard shell is public; its data APIs require the management token. The installer uses the server-only `telemetry-v0.1.2` release so desktop update releases are unaffected. `RMC_TELEMETRY_PORT` can override the port when needed.
+Open `http://43.159.148.243:18787/`. Only TCP 18787 needs to be allowed by the firewall. The dashboard shell is public; its data APIs require the management token. The installer uses the server-only `telemetry-v0.1.3` release so desktop update releases are unaffected. `RMC_TELEMETRY_PORT` can override the port when needed.

@@ -3,7 +3,7 @@ set -eu
 umask 077
 
 repository="${RMC_TELEMETRY_REPOSITORY:-Autumn-one/right-menu-check}"
-release_tag="${RMC_TELEMETRY_RELEASE_TAG:-telemetry-v0.1.2}"
+release_tag="${RMC_TELEMETRY_RELEASE_TAG:-telemetry-v0.1.3}"
 port="${RMC_TELEMETRY_PORT:-18787}"
 test_mode="${RMC_TELEMETRY_TEST_MODE:-0}"
 prefix="${RMC_TELEMETRY_TEST_ROOT:-}"
