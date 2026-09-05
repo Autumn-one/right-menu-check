@@ -110,9 +110,6 @@ try {
         Copy-Item -LiteralPath `
             (Join-Path $packagingRoot 'rightmenucheck-telemetry.service') `
             -Destination $stageRoot
-        Copy-Item -LiteralPath `
-            (Join-Path $packagingRoot 'rightmenucheck-telemetry.nginx.conf.template') `
-            -Destination $stageRoot
         Set-Content -LiteralPath (Join-Path $stageRoot 'VERSION') `
             -Value $Version -Encoding utf8NoBOM -NoNewline
 

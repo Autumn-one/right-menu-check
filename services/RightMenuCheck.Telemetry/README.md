@@ -4,16 +4,9 @@ This is the bounded lifecycle telemetry service for RightMenuCheck. It is a stan
 
 ## Network boundary
 
-The process only accepts a numeric loopback listen address such as 127.0.0.1:18787 or [::1]:18787. Wildcard, LAN, public, and hostname listeners are rejected even when an admin token is configured. The listener address is checked again after net.Listen.
+The Go process directly serves the dashboard, health endpoint, and telemetry APIs on `0.0.0.0:18787`. Deployment needs one TCP port and one systemd service. No reverse proxy or second internal port is required.
 
-The only supported public entry is an HTTPS reverse proxy running on the same machine and forwarding to this loopback service. The proxy must:
-
-- expose the telemetry routes over HTTPS only;
-- disable access logging for /v1/telemetry/* so client IP addresses are not collected;
-- avoid exposing /v1/admin/* publicly when possible; and
-- preserve the request body and Authorization header without recording either.
-
-Direct non-loopback plaintext operation is not supported.
+Non-loopback listeners require a management token and reject the test-only unauthenticated-admin switch. Hostname listen addresses are rejected. All existing request limits and authenticated session operations remain enforced. This direct endpoint uses HTTP; it does not provide TLS encryption.
 
 ## Data boundary
 
@@ -179,7 +172,7 @@ GET /health reports only {"status":"ok"} when SQLite is reachable.
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
-| RMC_TELEMETRY_LISTEN_ADDRESS | 127.0.0.1:18787 | Numeric loopback address and port |
+| RMC_TELEMETRY_LISTEN_ADDRESS | 0.0.0.0:18787 | Numeric listen address and port |
 | RMC_TELEMETRY_DATABASE_PATH | data/telemetry.db | SQLite database location |
 | RMC_TELEMETRY_ADMIN_TOKEN | none, required | Management bearer token, at least 32 characters |
 | RMC_TELEMETRY_ALLOW_UNAUTHENTICATED_LOOPBACK_ADMIN | false | Explicit integration-test-only bypass |
@@ -220,7 +213,7 @@ Stop the process with Ctrl+C or the service manager termination signal. The HTTP
 Release packages are built for Linux amd64 and arm64 from the repository root:
 
 ~~~powershell
-pwsh -NoLogo -NoProfile -File .\scripts\build-telemetry-packages.ps1 -Version 0.1.1
+pwsh -NoLogo -NoProfile -File .\scripts\build-telemetry-packages.ps1 -Version 0.1.2
 ~~~
 
 The builder emits a static binary archive, SHA-256 file, and ECDSA signature for each architecture under `artifacts/packages/telemetry`. The installer verifies the signature with the embedded distribution public key before trusting the checksum or extracting the archive.
@@ -228,17 +221,9 @@ The builder emits a static binary archive, SHA-256 file, and ECDSA signature for
 Install the current release on the telemetry server with:
 
 ~~~sh
-curl -fsSL https://raw.githubusercontent.com/Autumn-one/right-menu-check/main/scripts/install-telemetry.sh | sudo env RMC_TELEMETRY_SERVER_NAME=43.159.148.243 RMC_TELEMETRY_PORT=18787 bash
+curl -fsSL https://raw.githubusercontent.com/Autumn-one/right-menu-check/main/scripts/install-telemetry.sh | sudo bash
 ~~~
 
-The installer creates a dedicated system user, a protected environment file, a hardened systemd unit, and an Nginx reverse proxy. The generated management token remains in `/etc/rightmenucheck-telemetry/environment` and is preserved during upgrades.
+The installer replaces the existing executable and the same systemd unit, migrates the listener to `0.0.0.0:18787`, and preserves the SQLite database and management token in `/etc/rightmenucheck-telemetry/environment`. It removes only the old installer's `/etc/nginx/conf.d/rightmenucheck-telemetry.conf` when present. It neither installs a proxy nor uninstalls another application's proxy. On activation failure, the old binary, environment, unit and removed proxy configuration are restored.
 
-New installations use port 18787. Set `RMC_TELEMETRY_PORT` explicitly to move an existing installation to another free port; without this option its configured address is preserved. The installer updates the service environment, all Nginx upstreams, and health checks together, including when using the original v0.1.1 package. It checks the selected port with `ss` before migration and restores the old environment if service activation fails. The public URL remains unchanged.
-
-Plain HTTP exposes only telemetry ingestion and `/health`. The dashboard and management API remain loopback-only by default. Use an SSH tunnel for administration:
-
-~~~sh
-ssh -L 18787:127.0.0.1:18787 root@43.159.148.243
-~~~
-
-Then open `http://127.0.0.1:18787/`. A public management dashboard requires TLS plus an explicit `RMC_TELEMETRY_ADMIN_ALLOW` IP or CIDR.
+Open `http://43.159.148.243:18787/`. Only TCP 18787 needs to be allowed by the firewall. The dashboard shell is public; its data APIs require the management token. The installer uses the server-only `telemetry-v0.1.2` release so desktop update releases are unaffected. `RMC_TELEMETRY_PORT` can override the port when needed.

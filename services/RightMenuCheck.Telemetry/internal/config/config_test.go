@@ -15,13 +15,14 @@ func TestLoadRequiresAdminTokenByDefault(t *testing.T) {
 
 func TestLoadAllowsExplicitUnauthenticatedLoopbackTestMode(t *testing.T) {
 	clearEnvironment(t)
+	t.Setenv("RMC_TELEMETRY_LISTEN_ADDRESS", "127.0.0.1:18787")
 	t.Setenv("RMC_TELEMETRY_ALLOW_UNAUTHENTICATED_LOOPBACK_ADMIN", "true")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ListenAddress != defaultListenAddress || cfg.DatabasePath != defaultDatabasePath {
+	if cfg.ListenAddress != "127.0.0.1:18787" || cfg.DatabasePath != defaultDatabasePath {
 		t.Fatalf("unexpected defaults: %#v", cfg)
 	}
 	if cfg.SessionTimeout != 7*time.Minute || cfg.ClosedSessionTTL != 7*24*time.Hour ||
@@ -66,18 +67,34 @@ func TestLoadParsesProductionEnvironment(t *testing.T) {
 	}
 }
 
-func TestValidateAlwaysRejectsNonLoopbackListener(t *testing.T) {
+func TestValidateRejectsNonNumericListener(t *testing.T) {
 	cfg := validConfig()
 	for _, address := range []string{
-		"0.0.0.0:8787",
-		"192.0.2.1:8787",
 		"localhost:8787",
-		"[::]:8787",
+		":18787",
 	} {
 		cfg.ListenAddress = address
 		if err := cfg.Validate(); err == nil {
 			t.Fatalf("Validate() accepted non-numeric-loopback address %q", address)
 		}
+	}
+}
+
+func TestDefaultPublicListenerRequiresAuthentication(t *testing.T) {
+	clearEnvironment(t)
+	t.Setenv("RMC_TELEMETRY_ADMIN_TOKEN", strings.Repeat("a", 32))
+	cfg, err := Load()
+	if err != nil || cfg.ListenAddress != "0.0.0.0:18787" {
+		t.Fatalf("default public listener rejected or incorrect: %v", err)
+	}
+	t.Setenv("RMC_TELEMETRY_ALLOW_UNAUTHENTICATED_LOOPBACK_ADMIN", "true")
+	if _, err := Load(); err == nil {
+		t.Fatal("public listener accepted test-only admin bypass")
+	}
+	t.Setenv("RMC_TELEMETRY_ALLOW_UNAUTHENTICATED_LOOPBACK_ADMIN", "false")
+	t.Setenv("RMC_TELEMETRY_ADMIN_TOKEN", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("public listener accepted missing admin token")
 	}
 }
 

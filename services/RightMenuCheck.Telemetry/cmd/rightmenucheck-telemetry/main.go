@@ -86,11 +86,6 @@ func run(logger cleanup.Logger) error {
 		return err
 	}
 	defer listener.Close()
-	tcpAddress, ok := listener.Addr().(*net.TCPAddr)
-	if !ok || !tcpAddress.IP.IsLoopback() {
-		return errors.New("listener resolved outside the loopback interface")
-	}
-
 	handler := api.New(dataStore, api.Options{
 		Clock:                             time.Now,
 		AdminToken:                        cfg.AdminToken,

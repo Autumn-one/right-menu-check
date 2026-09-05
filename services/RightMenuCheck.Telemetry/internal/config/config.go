@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	defaultListenAddress = "127.0.0.1:18787"
+	defaultListenAddress = "0.0.0.0:18787"
 	defaultDatabasePath  = "data/telemetry.db"
 )
 
@@ -116,8 +116,11 @@ func (cfg Config) Validate() error {
 		return fmt.Errorf("listen address must include an explicit host and port: %w", err)
 	}
 	ip := net.ParseIP(host)
-	if ip == nil || !ip.IsLoopback() {
-		return errors.New("listen address must use a numeric loopback IP address")
+	if ip == nil {
+		return errors.New("listen address must use a numeric IP address")
+	}
+	if !ip.IsLoopback() && (cfg.AdminToken == "" || cfg.AllowUnauthenticatedLoopbackAdmin) {
+		return errors.New("public listeners require an admin token and forbid unauthenticated admin access")
 	}
 	parsedPort, err := strconv.ParseUint(port, 10, 16)
 	if err != nil || parsedPort == 0 {
