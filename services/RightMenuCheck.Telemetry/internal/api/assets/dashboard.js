@@ -132,13 +132,17 @@
   async function selectDevice(device) {
     state.selected = device;
     state.sessionOffset = 0;
+    renderDeviceDetails(device);
+    await loadSessions();
+  }
+
+  function renderDeviceDetails(device) {
     byId("detailStatus").className = `status-badge ${device.activeSessionCount > 0 ? "online" : "offline"}`;
     byId("detailStatus").textContent = device.activeSessionCount > 0 ? "运行中" : "离线";
     byId("detailMachine").textContent = device.machineId;
     byId("detailStarts").textContent = device.startupCount.toLocaleString("zh-CN");
     byId("detailDuration").textContent = formatDuration(device.totalDurationMilliseconds);
     byId("detailLastSeen").textContent = formatTime(device.lastSeenAtUtc);
-    await loadSessions();
   }
 
   function renderSessions(page) {
@@ -193,7 +197,10 @@
       renderDevices(machines);
       if (state.selected) {
         const current = machines.items.find(item => item.machineId === state.selected.machineId);
-        if (current) state.selected = current;
+        if (current) {
+          state.selected = current;
+          renderDeviceDetails(current);
+        }
         await loadSessions();
       }
       const now = new Date();
